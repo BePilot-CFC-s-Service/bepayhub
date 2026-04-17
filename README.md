@@ -27,10 +27,10 @@ API de transações da BePayHub, focada em criacao e consulta de pagamentos com 
 
 ### DDD (por camadas)
 
-- Presentation: [api/routes/student_payment.py](api/routes/student_payment.py), [api/routes/instructor_payment.py](api/routes/instructor_payment.py), [api/routes/payments.py](api/routes/payments.py), [api/routes/customers.py](api/routes/customers.py)
-- Application (validacoes de caso de uso): [api/schemas/validators.py](api/schemas/validators.py)
-- Domain (regras de composicao de pagamento): [api/services/payment_payload.py](api/services/payment_payload.py)
-- Infrastructure (gateway HTTP para Asaas): [api/services/asaas_service.py](api/services/asaas_service.py), [api/services/gateway.py](api/services/gateway.py)
+- Presentation (HTTP): [api/presentation/routes/student_payment.py](api/presentation/routes/student_payment.py), [api/presentation/routes/instructor_payment.py](api/presentation/routes/instructor_payment.py), [api/presentation/routes/payments.py](api/presentation/routes/payments.py), [api/presentation/routes/customers.py](api/presentation/routes/customers.py)
+- Application (validacoes): [api/application/validators.py](api/application/validators.py)
+- Domain (regras de composicao): [api/domain/payment_payload.py](api/domain/payment_payload.py)
+- Infrastructure (integracao Asaas): [api/infrastructure/asaas_service.py](api/infrastructure/asaas_service.py), [api/infrastructure/gateway.py](api/infrastructure/gateway.py)
 - Bootstrap/config da API: [api/app.py](api/app.py), [api/config.py](api/config.py)
 
 ### BDD (Behavior-Driven)
@@ -50,17 +50,19 @@ BePayHub/
     config.py
     errors.py
     requirements.txt
-    routes/
-      customers.py
-      instructor_payment.py
-      payments.py
-      student_payment.py
-    schemas/
+    presentation/
+      routes/
+        customers.py
+        instructor_payment.py
+        payments.py
+        student_payment.py
+    application/
       validators.py
-    services/
+    domain/
+      payment_payload.py
+    infrastructure/
       asaas_service.py
       gateway.py
-      payment_payload.py
     tests/
       conftest.py
       test_routes.py
@@ -96,6 +98,11 @@ python -m api.app
 ### Verificar Status da API
 
 GET /api/v1/health
+
+### Documentacao (Swagger / OpenAPI)
+
+- Swagger UI: GET /api/v1/docs/
+- OpenAPI JSON: GET /api/v1/openapi.json
 
 ### Criar Cliente
 

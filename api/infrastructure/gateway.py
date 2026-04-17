@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, Tuple
 
-from api.services.asaas_service import get_asaas_service
+from api.infrastructure.asaas_service import get_asaas_service
 
 
 def create_payment(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:

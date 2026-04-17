@@ -68,9 +68,7 @@ class AsaasService:
             params["externalReference"] = external_reference
         return self._request("GET", "/payments", params=params)
 
-    def create_customer(
-        self, payload: Dict[str, Any]
-    ) -> Tuple[Dict[str, Any], int]:
+    def create_customer(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
         return self._request("POST", "/customers", json_payload=payload)
 
 

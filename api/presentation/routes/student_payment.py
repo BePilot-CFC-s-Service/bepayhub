@@ -1,12 +1,12 @@
 from flask import Blueprint, jsonify, request
 
-from api.schemas.validators import require_json_body, validate_payment_payload
-from api.services import gateway
-from api.services.payment_payload import (
+from api.application.validators import require_json_body, validate_payment_payload
+from api.domain.payment_payload import (
     build_external_reference,
     build_payment_payload,
     get_billing_type,
 )
+from api.infrastructure import gateway
 
 student_payment_bp = Blueprint("student_payment", __name__)
 
