@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, request
 
-from api.schemas.validators import get_external_reference_by_origin, validate_origin
-from api.services import gateway
-from api.services.payment_payload import build_external_reference
+from api.application.validators import get_external_reference_by_origin, validate_origin
+from api.domain.payment_payload import build_external_reference
+from api.infrastructure import gateway
 
 payments_bp = Blueprint("payments", __name__)
 

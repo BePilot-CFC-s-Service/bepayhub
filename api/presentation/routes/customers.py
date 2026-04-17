@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
-from api.schemas.validators import require_json_body, validate_customer_payload
-from api.services import gateway
+from api.application.validators import require_json_body, validate_customer_payload
+from api.infrastructure import gateway
 
 customers_bp = Blueprint("customers", __name__)
 

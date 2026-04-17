@@ -12,7 +12,10 @@ def test_given_valid_pix_payment_when_creating_student_payment_then_returns_200(
         assert payload["externalReference"] == "studentPayment"
         return {"id": "pay_123"}, 200
 
-    monkeypatch.setattr("api.services.gateway.create_payment", fake_create_payment)
+    monkeypatch.setattr(
+        "api.infrastructure.gateway.create_payment",
+        fake_create_payment,
+    )
 
     response = client.post(
         f"{API_PREFIX}/payments/student/driving-lessons/pix",
@@ -72,7 +75,10 @@ def test_given_student_origin_with_filters_when_listing_payments_then_builds_exp
         captured["extra_params"] = extra_params
         return {"data": []}, 200
 
-    monkeypatch.setattr("api.services.gateway.list_payments", fake_list_payments)
+    monkeypatch.setattr(
+        "api.infrastructure.gateway.list_payments",
+        fake_list_payments,
+    )
 
     response = client.get(
         f"{API_PREFIX}/payments/student?student_id=stu_10&lesson_id=les_90&status=PENDING"
@@ -87,7 +93,7 @@ def test_given_valid_customer_payload_when_creating_customer_then_returns_200(
     client, monkeypatch
 ):
     monkeypatch.setattr(
-        "api.services.gateway.create_customer",
+        "api.infrastructure.gateway.create_customer",
         lambda payload: ({"id": "cus_123", **payload}, 200),
     )
 
@@ -108,7 +114,10 @@ def test_given_asaas_timeout_when_creating_instructor_monthly_fee_then_returns_5
             "Tempo limite excedido na integracao com Asaas", status_code=504
         )
 
-    monkeypatch.setattr("api.services.gateway.create_payment", fake_create_payment)
+    monkeypatch.setattr(
+        "api.infrastructure.gateway.create_payment",
+        fake_create_payment,
+    )
 
     response = client.post(
         f"{API_PREFIX}/payments/instructor/monthly-fees",
@@ -150,3 +159,18 @@ def test_given_monthly_fee_without_card_fields_when_creating_instructor_monthly_
     )
 
     assert response.status_code == 400
+
+
+def test_openapi_json_is_available(client):
+    response = client.get(f"{API_PREFIX}/openapi.json")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["openapi"].startswith("3.")
+    assert "/customers" in payload["paths"]
+
+
+def test_swagger_ui_is_available(client):
+    response = client.get(f"{API_PREFIX}/docs/")
+
+    assert response.status_code == 200
