@@ -17,12 +17,12 @@ def test_given_valid_pix_payment_when_creating_student_payment_then_returns_200(
         return {"pix": {"payload": "000201..."}}, 200
 
     monkeypatch.setattr(
-        "api.repositories.payment_repository.create_payment",
+        "repositories.payment_repository.create_payment",
         fake_create_payment,
     )
 
     monkeypatch.setattr(
-        "api.repositories.payment_repository.get_payment_billing_info",
+        "repositories.payment_repository.get_payment_billing_info",
         fake_get_payment_billing_info,
     )
 
@@ -86,7 +86,7 @@ def test_given_student_origin_with_filters_when_listing_payments_then_builds_exp
         return {"data": []}, 200
 
     monkeypatch.setattr(
-        "api.repositories.payment_repository.list_payments",
+        "repositories.payment_repository.list_payments",
         fake_list_payments,
     )
 
@@ -103,7 +103,7 @@ def test_given_valid_customer_payload_when_creating_customer_then_returns_200(
     client, monkeypatch
 ):
     monkeypatch.setattr(
-        "api.repositories.payment_repository.create_customer",
+        "repositories.payment_repository.create_customer",
         lambda payload: ({"id": "cus_123", **payload}, 200),
     )
 
@@ -131,7 +131,7 @@ def test_given_asaas_timeout_when_creating_instructor_monthly_fee_then_returns_5
         )
 
     monkeypatch.setattr(
-        "api.repositories.payment_repository.create_subscription",
+        "repositories.payment_repository.create_subscription",
         fake_create_subscription,
     )
 

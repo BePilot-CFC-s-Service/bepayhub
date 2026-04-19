@@ -316,4 +316,6 @@ def create_app() -> Flask:
 
 if __name__ == "__main__":
     application = create_app()
-    application.run(debug=Settings.DEBUG, port=Settings.PORT)
+    port = int(os.environ.get("PORT", 10000))
+
+    application.run(host="0.0.0.0", port=port, debug=Settings.DEBUG)
