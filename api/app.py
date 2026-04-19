@@ -8,6 +8,7 @@ from controllers.payments import payments_bp
 from controllers.student_payments import student_payment_bp
 from errors import ApiError
 from openapi.models import openapi_component_schemas
+import os
 
 
 def _build_openapi_spec(api_prefix: str) -> dict:
