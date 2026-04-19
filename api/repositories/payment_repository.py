@@ -1,10 +1,18 @@
 from typing import Any, Dict, Optional, Tuple
 
-from api.infrastructure.asaas_service import get_asaas_service
+from services.asaas_service import get_asaas_service
 
 
 def create_payment(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
     return get_asaas_service().create_payment(payload)
+
+
+def create_subscription(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+    return get_asaas_service().create_subscription(payload)
+
+
+def get_payment_billing_info(payment_id: str) -> Tuple[Dict[str, Any], int]:
+    return get_asaas_service().get_payment_billing_info(payment_id)
 
 
 def list_payments(

@@ -2,8 +2,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from api.config import Settings, validate_settings
-from api.errors import ServiceIntegrationError
+from config import Settings, validate_settings
+from errors import ServiceIntegrationError
 
 
 class AsaasService:
@@ -57,6 +57,12 @@ class AsaasService:
 
     def create_payment(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
         return self._request("POST", "/payments", json_payload=payload)
+
+    def create_subscription(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+        return self._request("POST", "/subscriptions", json_payload=payload)
+
+    def get_payment_billing_info(self, payment_id: str) -> Tuple[Dict[str, Any], int]:
+        return self._request("GET", f"/payments/{payment_id}/billingInfo")
 
     def list_payments(
         self,

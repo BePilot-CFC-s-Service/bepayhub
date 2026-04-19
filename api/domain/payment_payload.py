@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from api.errors import ValidationError
+from errors import ValidationError
 
 BILLING_TYPE_MAP = {
     "pix": "PIX",
@@ -40,6 +40,32 @@ def build_payment_payload(
     return payload
 
 
+def build_subscription_payload(
+    data: Dict[str, Any],
+    billing_type: str,
+    description: str,
+    external_reference: str,
+    cycle: str,
+    remote_ip: Optional[str] = None,
+) -> Dict[str, Any]:
+    payload = {
+        "customer": data["customer_id"],
+        "billingType": billing_type,
+        "value": data["value"],
+        "nextDueDate": data["due_date"],
+        "cycle": cycle,
+        "description": description,
+        "externalReference": external_reference,
+    }
+
+    if billing_type == "CREDIT_CARD":
+        payload["creditCard"] = data["creditCard"]
+        payload["creditCardHolderInfo"] = data["creditCardHolderInfo"]
+        payload["remoteIp"] = remote_ip
+
+    return payload
+
+
 def build_external_reference(
     *,
     origin: str,
@@ -53,6 +79,8 @@ def build_external_reference(
             parts.append(f"student={student_id}")
         if lesson_id:
             parts.append(f"lesson={lesson_id}")
+        if instructor_id:
+            parts.append(f"instructor={instructor_id}")
         return ":".join(parts)
 
     if origin == "instructorPayment":
