@@ -23,15 +23,16 @@ API de transações da BePayHub, focada em criacao e consulta de pagamentos com 
 - Integracao externa: Asaas API
 - Objetivo principal: centralizar cobrancas de aluno (aula) e mensalidade de instrutor (assinatura)
 
-## Arquitetura DDD e BDD
+## Arquitetura DDD (por camadas)
 
-### DDD (por camadas)
-
-- Presentation (HTTP): [api/presentation/routes/student_payment.py](api/presentation/routes/student_payment.py), [api/presentation/routes/instructor_payment.py](api/presentation/routes/instructor_payment.py), [api/presentation/routes/payments.py](api/presentation/routes/payments.py), [api/presentation/routes/customers.py](api/presentation/routes/customers.py)
-- Application (validacoes): [api/application/validators.py](api/application/validators.py)
-- Domain (regras de composicao): [api/domain/payment_payload.py](api/domain/payment_payload.py)
-- Infrastructure (integracao Asaas): [api/infrastructure/asaas_service.py](api/infrastructure/asaas_service.py), [api/infrastructure/gateway.py](api/infrastructure/gateway.py)
+- Controllers (HTTP): [api/controllers/student_payments.py](api/controllers/student_payments.py), [api/controllers/instructor_payments.py](api/controllers/instructor_payments.py), [api/controllers/payments.py](api/controllers/payments.py), [api/controllers/customers.py](api/controllers/customers.py)
+- Services (lógica de negócio): [api/services/payment_service.py](api/services/payment_service.py), [api/services/customer_service.py](api/services/customer_service.py)
+- Application (validações): [api/application/validators.py](api/application/validators.py)
+- Domain (regras de composição): [api/domain/payment_payload.py](api/domain/payment_payload.py)
+- Repositories (abstração de dados): [api/repositories/payment_repository.py](api/repositories/payment_repository.py)
+- Infrastructure (integração Asaas): [api/services/asaas_service.py](api/services/asaas_service.py)
 - Bootstrap/config da API: [api/app.py](api/app.py), [api/config.py](api/config.py)
+- OpenAPI (schemas automáticos): [api/openapi/models.py](api/openapi/models.py)
 
 ### BDD (Behavior-Driven)
 
@@ -40,7 +41,7 @@ Os testes foram escritos em estilo Given/When/Then para descrever comportamento.
 - Cenarios BDD: [api/tests/test_routes.py](api/tests/test_routes.py)
 - Fixtures de suporte: [api/tests/conftest.py](api/tests/conftest.py)
 
-## Estrutura do repositorio
+## Estrutura do repositório
 
 ```text
 BePayHub/
@@ -50,19 +51,23 @@ BePayHub/
     config.py
     errors.py
     requirements.txt
-    presentation/
-      routes/
-        customers.py
-        instructor_payment.py
-        payments.py
-        student_payment.py
+    openapi/
+      models.py
+    controllers/
+      customers.py
+      instructor_payments.py
+      payments.py
+      student_payments.py
+    services/
+      asaas_service.py
+      customer_service.py
+      payment_service.py
     application/
       validators.py
     domain/
       payment_payload.py
-    infrastructure/
-      asaas_service.py
-      gateway.py
+    repositories/
+      payment_repository.py
     tests/
       conftest.py
       test_routes.py
@@ -87,11 +92,19 @@ API_PREFIX=/api/v1
 ### Copia e cola - setup
 
 ```bash
+cd api/
 python -m venv .venv
 source .venv/Scripts/activate
-pip install -r api/requirements.txt
-python -m api.app
+pip install -r requirements.txt
+python app.py
 ```
+
+### Swagger automático
+
+O Swagger UI é montado a partir do OpenAPI gerado em runtime. Os schemas de request/response ficam em [api/openapi/models.py](api/openapi/models.py) (Pydantic).
+
+- Para adicionar/remover campos que aparecem no Swagger: edite o model correspondente em [api/openapi/models.py](api/openapi/models.py)
+- O endpoint `/api/v1/openapi.json` passa a refletir essas mudanças sem precisar editar `app.py`
 
 ## Endpoints v1
 

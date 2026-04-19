@@ -1,12 +1,13 @@
 from flask import Flask, jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
 
-from api.config import Settings
-from api.errors import ApiError
-from api.presentation.routes.customers import customers_bp
-from api.presentation.routes.instructor_payment import instructor_payment_bp
-from api.presentation.routes.payments import payments_bp
-from api.presentation.routes.student_payment import student_payment_bp
+from config import Settings
+from controllers.customers import customers_bp
+from controllers.instructor_payments import instructor_payment_bp
+from controllers.payments import payments_bp
+from controllers.student_payments import student_payment_bp
+from errors import ApiError
+from openapi.models import openapi_component_schemas
 
 
 def _build_openapi_spec(api_prefix: str) -> dict:
@@ -15,7 +16,7 @@ def _build_openapi_spec(api_prefix: str) -> dict:
         "info": {
             "title": "BePayHub",
             "version": "1.0.0",
-            "description": "API de transacoes da BePayHub (Asaas)",
+            "description": "API de transações da BePilot (Asaas)",
         },
         "servers": [{"url": api_prefix}],
         "paths": {
@@ -155,7 +156,7 @@ def _build_openapi_spec(api_prefix: str) -> dict:
                     },
                     "responses": {
                         "200": {
-                            "description": "Pagamento criado no Asaas",
+                            "description": "Assinatura criada no Asaas",
                             "content": {
                                 "application/json": {
                                     "schema": {"type": "object", "additionalProperties": True}
@@ -265,91 +266,7 @@ def _build_openapi_spec(api_prefix: str) -> dict:
                     "required": ["error"],
                     "additionalProperties": False,
                 },
-                "CreateCustomerRequest": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "cpf_cnpj": {"type": "string"},
-                        "email": {"type": "string", "format": "email"},
-                    },
-                    "required": ["name", "cpf_cnpj", "email"],
-                    "additionalProperties": False,
-                },
-                "StudentPaymentRequest": {
-                    "type": "object",
-                    "properties": {
-                        "customer_id": {"type": "string"},
-                        "value": {"type": "number"},
-                        "due_date": {"type": "string", "example": "2026-04-10"},
-                        "student_id": {"type": "string"},
-                        "lesson_id": {"type": "string"},
-                        "creditCard": {"$ref": "#/components/schemas/CreditCard"},
-                        "creditCardHolderInfo": {
-                            "$ref": "#/components/schemas/CreditCardHolderInfo"
-                        },
-                    },
-                    "required": ["customer_id", "value", "due_date"],
-                    "additionalProperties": False,
-                },
-                "InstructorMonthlyFeeRequest": {
-                    "type": "object",
-                    "properties": {
-                        "customer_id": {"type": "string"},
-                        "value": {"type": "number"},
-                        "due_date": {"type": "string", "example": "2026-04-10"},
-                        "instructor_id": {"type": "string"},
-                        "creditCard": {"$ref": "#/components/schemas/CreditCard"},
-                        "creditCardHolderInfo": {
-                            "$ref": "#/components/schemas/CreditCardHolderInfo"
-                        },
-                    },
-                    "required": [
-                        "customer_id",
-                        "value",
-                        "due_date",
-                        "creditCard",
-                        "creditCardHolderInfo",
-                    ],
-                    "additionalProperties": False,
-                },
-                "CreditCard": {
-                    "type": "object",
-                    "properties": {
-                        "holderName": {"type": "string"},
-                        "number": {"type": "string"},
-                        "expiryMonth": {"type": "string"},
-                        "expiryYear": {"type": "string"},
-                        "ccv": {"type": "string"},
-                    },
-                    "required": [
-                        "holderName",
-                        "number",
-                        "expiryMonth",
-                        "expiryYear",
-                        "ccv",
-                    ],
-                    "additionalProperties": False,
-                },
-                "CreditCardHolderInfo": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "email": {"type": "string", "format": "email"},
-                        "cpfCnpj": {"type": "string"},
-                        "postalCode": {"type": "string"},
-                        "addressNumber": {"type": "string"},
-                        "phone": {"type": "string"},
-                    },
-                    "required": [
-                        "name",
-                        "email",
-                        "cpfCnpj",
-                        "postalCode",
-                        "addressNumber",
-                        "phone",
-                    ],
-                    "additionalProperties": False,
-                },
+                **openapi_component_schemas(),
             }
         },
     }

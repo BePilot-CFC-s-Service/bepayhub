@@ -1,4 +1,4 @@
-from api.errors import ServiceIntegrationError
+from errors import ServiceIntegrationError
 
 
 API_PREFIX = "/api/v1"
@@ -12,9 +12,18 @@ def test_given_valid_pix_payment_when_creating_student_payment_then_returns_200(
         assert payload["externalReference"] == "studentPayment"
         return {"id": "pay_123"}, 200
 
+    def fake_get_payment_billing_info(payment_id: str):
+        assert payment_id == "pay_123"
+        return {"pix": {"payload": "000201..."}}, 200
+
     monkeypatch.setattr(
-        "api.infrastructure.gateway.create_payment",
+        "api.repositories.payment_repository.create_payment",
         fake_create_payment,
+    )
+
+    monkeypatch.setattr(
+        "api.repositories.payment_repository.get_payment_billing_info",
+        fake_get_payment_billing_info,
     )
 
     response = client.post(
@@ -28,6 +37,7 @@ def test_given_valid_pix_payment_when_creating_student_payment_then_returns_200(
 
     assert response.status_code == 200
     assert response.get_json()["id"] == "pay_123"
+    assert response.get_json()["pix"]["payload"] == "000201..."
 
 
 def test_given_invalid_payment_method_when_creating_student_payment_then_returns_400(
@@ -76,7 +86,7 @@ def test_given_student_origin_with_filters_when_listing_payments_then_builds_exp
         return {"data": []}, 200
 
     monkeypatch.setattr(
-        "api.infrastructure.gateway.list_payments",
+        "api.repositories.payment_repository.list_payments",
         fake_list_payments,
     )
 
@@ -93,13 +103,19 @@ def test_given_valid_customer_payload_when_creating_customer_then_returns_200(
     client, monkeypatch
 ):
     monkeypatch.setattr(
-        "api.infrastructure.gateway.create_customer",
+        "api.repositories.payment_repository.create_customer",
         lambda payload: ({"id": "cus_123", **payload}, 200),
     )
 
     response = client.post(
         f"{API_PREFIX}/customers",
-        json={"name": "Joao", "cpf_cnpj": "12345678900", "email": "joao@email.com"},
+        json={
+            "name": "Joao",
+            "cpf_cnpj": "12345678900",
+            "email": "joao@email.com",
+            "mobile_phone": "11999999999",
+            "external_reference": {"student_id": 10},
+        },
     )
 
     assert response.status_code == 200
@@ -109,14 +125,14 @@ def test_given_valid_customer_payload_when_creating_customer_then_returns_200(
 def test_given_asaas_timeout_when_creating_instructor_monthly_fee_then_returns_504(
     client, monkeypatch
 ):
-    def fake_create_payment(_payload):
+    def fake_create_subscription(_payload):
         raise ServiceIntegrationError(
             "Tempo limite excedido na integracao com Asaas", status_code=504
         )
 
     monkeypatch.setattr(
-        "api.infrastructure.gateway.create_payment",
-        fake_create_payment,
+        "api.repositories.payment_repository.create_subscription",
+        fake_create_subscription,
     )
 
     response = client.post(
