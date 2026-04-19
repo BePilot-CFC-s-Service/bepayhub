@@ -1,115 +1,158 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Type
-
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from typing import Any, Dict
 
 
-class CustomerExternalReference(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    instructor_id: Optional[int] = Field(
-        default=None, description="ID do instrutor (use apenas este OU student_id)"
-    )
-    student_id: Optional[int] = Field(
-        default=None, description="ID do aluno (use apenas este OU instructor_id)"
-    )
-
-    @model_validator(mode="after")
-    def _xor_student_instructor(self) -> "CustomerExternalReference":
-        has_instructor = self.instructor_id is not None
-        has_student = self.student_id is not None
-        if has_instructor == has_student:
-            raise ValueError(
-                "external_reference deve conter exatamente um: instructor_id ou student_id"
-            )
-        return self
+def _obj(
+    *,
+    properties: Dict[str, Any],
+    required: list[str] | None = None,
+    additional_properties: bool = False,
+    description: str | None = None,
+) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": additional_properties,
+    }
+    if required:
+        schema["required"] = required
+    if description:
+        schema["description"] = description
+    return schema
 
 
-class CreateCustomerRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    cpf_cnpj: str = Field(..., description="CPF ou CNPJ")
-    email: EmailStr
-    mobile_phone: str
-
-    # Endereço (opcional; se enviar um, idealmente enviar todos)
-    address: Optional[str] = None
-    address_number: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
-
-    # Extras
-    complement: Optional[str] = None
-    observations: Optional[str] = None
-    external_reference: CustomerExternalReference
+def _str(*, description: str | None = None, example: Any | None = None, fmt: str | None = None) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {"type": "string"}
+    if description:
+        schema["description"] = description
+    if example is not None:
+        schema["example"] = example
+    if fmt:
+        schema["format"] = fmt
+    return schema
 
 
-class CreditCard(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    holderName: str
-    number: str
-    expiryMonth: str
-    expiryYear: str
-    ccv: str
-
-
-class CreditCardHolderInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    email: EmailStr
-    cpfCnpj: str
-    postalCode: str
-    addressNumber: str
-    phone: str
+def _num(*, description: str | None = None, example: Any | None = None) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {"type": "number"}
+    if description:
+        schema["description"] = description
+    if example is not None:
+        schema["example"] = example
+    return schema
 
 
-class StudentPaymentRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    customer_id: str
-    value: float
-    due_date: str = Field(..., json_schema_extra={"example": "2026-04-10"})
-    student_id: Optional[str] = None
-    lesson_id: Optional[str] = None
-    instructor_id: Optional[str] = None
-
-    # Obrigatório apenas quando method=credit
-    creditCard: Optional[CreditCard] = None
-    creditCardHolderInfo: Optional[CreditCardHolderInfo] = None
-
-
-class InstructorMonthlyFeeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    customer_id: str
-    value: float
-    due_date: str = Field(..., json_schema_extra={"example": "2026-04-10"})
-    instructor_id: Optional[str] = None
-
-    creditCard: CreditCard
-    creditCardHolderInfo: CreditCardHolderInfo
+def _int(*, description: str | None = None, example: Any | None = None) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {"type": "integer"}
+    if description:
+        schema["description"] = description
+    if example is not None:
+        schema["example"] = example
+    return schema
 
 
 def openapi_component_schemas() -> Dict[str, Any]:
-    models: tuple[Type[BaseModel], ...] = (
-        CustomerExternalReference,
-        CreateCustomerRequest,
-        CreditCard,
-        CreditCardHolderInfo,
-        StudentPaymentRequest,
-        InstructorMonthlyFeeRequest,
+    # JSON Schemas (OpenAPI 3.0) definidos manualmente, sem depender de Pydantic.
+
+    customer_external_reference = {
+        "description": "Use exatamente um: instructor_id OU student_id",
+        "oneOf": [
+            _obj(
+                properties={"instructor_id": _int(description="ID do instrutor")},
+                required=["instructor_id"],
+                additional_properties=False,
+            ),
+            _obj(
+                properties={"student_id": _int(description="ID do aluno")},
+                required=["student_id"],
+                additional_properties=False,
+            ),
+        ],
+    }
+
+    create_customer_request = _obj(
+        properties={
+            "name": _str(),
+            "cpf_cnpj": _str(description="CPF ou CNPJ"),
+            "email": _str(fmt="email"),
+            "mobile_phone": _str(),
+            "address": _str(),
+            "address_number": _str(),
+            "city": _str(),
+            "state": _str(),
+            "postal_code": _str(),
+            "complement": _str(),
+            "observations": _str(),
+            "external_reference": {"$ref": "#/components/schemas/CustomerExternalReference"},
+        },
+        required=["name", "cpf_cnpj", "email", "mobile_phone", "external_reference"],
+        additional_properties=False,
     )
 
-    merged: Dict[str, Any] = {}
-    for model in models:
-        schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
-        defs = schema.pop("$defs", {})
-        merged.update(defs)
-        merged[model.__name__] = schema
+    credit_card = _obj(
+        properties={
+            "holderName": _str(),
+            "number": _str(),
+            "expiryMonth": _str(example="12"),
+            "expiryYear": _str(example="2030"),
+            "ccv": _str(example="123"),
+        },
+        required=["holderName", "number", "expiryMonth", "expiryYear", "ccv"],
+        additional_properties=False,
+    )
 
-    return merged
+    credit_card_holder_info = _obj(
+        properties={
+            "name": _str(),
+            "email": _str(fmt="email"),
+            "cpfCnpj": _str(),
+            "postalCode": _str(),
+            "addressNumber": _str(description="Numero/identificador do endereco"),
+            "phone": _str(),
+        },
+        required=["name", "email", "cpfCnpj", "postalCode", "addressNumber", "phone"],
+        additional_properties=False,
+    )
+
+    student_payment_request = _obj(
+        properties={
+            "customer_id": _str(),
+            "value": _num(),
+            "due_date": _str(example="2026-04-10"),
+            "student_id": _int(),
+            "lesson_id": _int(),
+            "instructor_id": _int(),
+            "creditCard": {"$ref": "#/components/schemas/CreditCard"},
+            "creditCardHolderInfo": {"$ref": "#/components/schemas/CreditCardHolderInfo"},
+        },
+        required=["customer_id", "value", "due_date"],
+        additional_properties=False,
+    )
+
+    instructor_monthly_fee_request = _obj(
+        properties={
+            "customer_id": _str(),
+            "value": _num(),
+            "due_date": _str(example="2026-04-10"),
+            "instructor_id": _int(),
+            "creditCard": {"$ref": "#/components/schemas/CreditCard"},
+            "creditCardHolderInfo": {"$ref": "#/components/schemas/CreditCardHolderInfo"},
+        },
+        required=[
+            "customer_id",
+            "value",
+            "due_date",
+            "creditCard",
+            "creditCardHolderInfo",
+        ],
+        additional_properties=False,
+    )
+
+    return {
+        "CustomerExternalReference": customer_external_reference,
+        "CreateCustomerRequest": create_customer_request,
+        "CreditCard": credit_card,
+        "CreditCardHolderInfo": credit_card_holder_info,
+        "StudentPaymentRequest": student_payment_request,
+        "InstructorMonthlyFeeRequest": instructor_monthly_fee_request,
+    }
