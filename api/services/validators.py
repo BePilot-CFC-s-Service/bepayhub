@@ -1,3 +1,6 @@
+"""
+Validators - Validações de entrada de dados
+"""
 from typing import Any, Dict, Iterable
 
 from flask import Request
@@ -5,43 +8,40 @@ from flask import Request
 from errors import ValidationError
 
 
-ORIGIN_EXTERNAL_REFERENCE_MAP = {
-    "student": "studentPayment",
-    "instructor": "instructorPayment",
-}
-
-
 def require_json_body(req: Request) -> Dict[str, Any]:
+    """Valida se o corpo da requisição é JSON"""
     if not req.is_json:
         raise ValidationError(
-            "Conteudo da requisicao deve ser JSON",
+            "Conteúdo da requisição deve ser JSON",
             status_code=400,
         )
 
     data = req.get_json(silent=True)
     if not isinstance(data, dict):
-        raise ValidationError("Payload JSON invalido", status_code=400)
+        raise ValidationError("Payload JSON inválido", status_code=400)
 
     return data
 
 
 def require_fields(data: Dict[str, Any], fields: Iterable[str]) -> None:
+    """Valida se campos obrigatórios estão presentes"""
     missing = [field for field in fields if data.get(field) in (None, "")]
     if missing:
         raise ValidationError(
-            "Campos obrigatorios ausentes",
+            "Campos obrigatórios ausentes",
             status_code=400,
             details={"missing": missing},
         )
 
 
 def validate_payment_payload(data: Dict[str, Any], billing_type: str) -> None:
+    """Valida payload de pagamento"""
     require_fields(data, ["customer_id", "value", "due_date"])
 
     try:
         value = float(data["value"])
     except (TypeError, ValueError) as exc:
-        raise ValidationError("Campo value deve ser numerico", status_code=400) from exc
+        raise ValidationError("Campo value deve ser numérico", status_code=400) from exc
 
     if value <= 0:
         raise ValidationError("Campo value deve ser maior que zero", status_code=400)
@@ -51,6 +51,7 @@ def validate_payment_payload(data: Dict[str, Any], billing_type: str) -> None:
 
 
 def validate_customer_payload(data: Dict[str, Any]) -> None:
+    """Valida payload de cliente"""
     require_fields(data, ["name", "cpf_cnpj", "email", "mobile_phone", "external_reference"])
 
     external_reference = data.get("external_reference")
@@ -68,7 +69,7 @@ def validate_customer_payload(data: Dict[str, Any]) -> None:
             status_code=400,
         )
 
-    # valida tipos
+    # Valida tipos
     try:
         if has_instructor:
             int(external_reference["instructor_id"])
@@ -86,12 +87,9 @@ def validate_customer_payload(data: Dict[str, Any]) -> None:
 
 
 def validate_origin(origin: str) -> None:
-    if origin not in ORIGIN_EXTERNAL_REFERENCE_MAP:
+    """Valida origem de pagamento"""
+    if origin not in ("student", "instructor"):
         raise ValidationError(
-            "Origem invalida. Use student ou instructor",
+            "Origem inválida. Use 'student' ou 'instructor'",
             status_code=400,
         )
-
-
-def get_external_reference_by_origin(origin: str) -> str:
-    return ORIGIN_EXTERNAL_REFERENCE_MAP[origin]
