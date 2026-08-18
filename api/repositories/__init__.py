@@ -1,6 +1,2 @@
-"""
-Repositories - Camada de acesso a dados (Asaas API)
-"""
+from .supabase_repository import SupabaseRepository
 from .asaas_repository import AsaasRepository
-
-__all__ = ["AsaasRepository"]

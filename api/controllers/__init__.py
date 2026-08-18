@@ -1,8 +1,3 @@
-"""
-Controllers - Camada de apresentação com rotas HTTP
-"""
+from .health_controller import HealthController
 from .customer_controller import CustomerController
-from .student_controller import StudentController
-from .instructor_controller import InstructorController
-
-__all__ = ["CustomerController", "StudentController", "InstructorController"]
+from .payment_controller import PaymentController

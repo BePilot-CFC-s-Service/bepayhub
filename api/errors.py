@@ -5,10 +5,11 @@ class ApiError(Exception):
         self.status_code = status_code
         self.details = details
 
-
 class ValidationError(ApiError):
     pass
 
+class NotFoundError(ApiError):
+    pass
 
-class ServiceIntegrationError(ApiError):
+class IntegrationError(ApiError):
     pass
