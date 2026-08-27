@@ -1,3 +1,4 @@
+
 from errors import ValidationError
 
 def validate_required_fields(data: dict, fields: list) -> None:

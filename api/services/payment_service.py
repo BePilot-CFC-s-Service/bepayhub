@@ -1,9 +1,9 @@
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
-from errors import ValidationError, NotFoundError, IntegrationError
+from errors import ValidationError, NotFoundError
 from utils.validators import validate_required_fields
+from utils.asaas_status import map_asaas_status_to_payment_status
 from models.enums import PaymentStatus
 
 class PaymentService:
@@ -11,8 +11,20 @@ class PaymentService:
         self.supabase = SupabaseRepository
         self.asaas = AsaasRepository
 
+    def _get_due_date(self, lesson: dict) -> str:
+        """Retorna a data de vencimento no formato YYYY-MM-DD."""
+        payment_deadline = lesson.get("payment_deadline")
+        if payment_deadline:
+            if isinstance(payment_deadline, str):
+                due_date = payment_deadline.split("T")[0].split(" ")[0]
+                if due_date:
+                    return due_date
+            else:
+                return payment_deadline.strftime("%Y-%m-%d")
+        return datetime.now().strftime("%Y-%m-%d")
+
     def pay_lesson(self, lesson_id: int, data: dict) -> dict:
-        """Processa pagamento de uma aula."""
+        """Processa pagamento de uma aula com split e retorna dados do PIX se aplicável."""
         validate_required_fields(data, ["payment_method"])
         payment_method = data["payment_method"].lower()
 
@@ -21,7 +33,6 @@ class PaymentService:
         if not lesson:
             raise NotFoundError("Aula não encontrada", 404)
 
-        # Verifica se aula já está paga
         if lesson["payment_status"] == PaymentStatus.PAID.value:
             return {"success": False, "error": "Aula já paga"}
 
@@ -30,32 +41,50 @@ class PaymentService:
         if not student or not student.get("bepayhub_customer_id"):
             raise ValidationError("Student não possui customer cadastrado", 400)
 
+        # Busca instrutor para obter asaas_wallet_id (subconta)
+        instructor = self.supabase.fetch_one("instructor", {"id": lesson["instructor_id"]})
+        if not instructor:
+            raise ValidationError("Instrutor não encontrado", 404)
+
+        wallet_id = instructor.get("asaas_wallet_id")
+        if not wallet_id:
+            raise ValidationError(
+                "Instrutor não possui asaas_wallet_id cadastrado. Crie a subconta primeiro.",
+                400
+            )
+
         # Monta payload de pagamento
         payment_payload = {
             "customer": student["bepayhub_customer_id"],
             "billingType": self._map_billing_type(payment_method),
             "value": lesson["total_price"],
-            "dueDate": lesson["payment_deadline"].split("T")[0] if lesson.get("payment_deadline") else None,
+            "dueDate": self._get_due_date(lesson),
             "description": f"Aula {lesson_id}",
             "externalReference": f"lesson_{lesson_id}",
         }
 
-        # Adiciona dados de cartão se necessário
+        payment_payload["split"] = [
+            {
+                "walletId": wallet_id,
+                "percentualValue": 90
+            }
+        ]
+
         if payment_payload["billingType"] == "CREDIT_CARD":
             validate_required_fields(data, ["credit_card", "credit_card_holder_info"])
             payment_payload["creditCard"] = data["credit_card"]
             payment_payload["creditCardHolderInfo"] = data["credit_card_holder_info"]
             payment_payload["remoteIp"] = data.get("remote_ip")
 
-        # Cria pagamento no Asaas
         asaas_response = self.asaas.create_payment(payment_payload)
 
-        # Cria registro de pagamento no Supabase
+        mapped_status = map_asaas_status_to_payment_status(asaas_response.get("status", "PENDING"))
+
         payment_record = {
             "lesson_id": lesson_id,
             "bepayhub_transaction_id": asaas_response["id"],
             "amount": lesson["total_price"],
-            "status": asaas_response["status"],  # PENDING, etc.
+            "status": mapped_status,
             "method": payment_method,
             "pix_qr_code": asaas_response.get("pixQrCodeUrl"),
             "pix_copy_paste": asaas_response.get("pixCopiaECola"),
@@ -64,13 +93,19 @@ class PaymentService:
         }
         self.supabase.insert("payment", payment_record)
 
-        # Atualiza status da aula se necessário
-        if asaas_response["status"] == "CONFIRMED":
-            self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": PaymentStatus.PAID.value})
-        else:
-            self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": PaymentStatus.PENDING.value})
+        self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": mapped_status})
 
-        return {"success": True}
+        result = {
+            "success": True,
+            "payment_id": asaas_response["id"],
+        }
+
+        if payment_payload["billingType"] == "PIX":
+            pix_data = self.asaas.get_pix_qr_code(asaas_response["id"])
+            result["pix_qr_code"] = pix_data.get("encodedImage")
+            result["pix_copy_paste"] = pix_data.get("payload")
+
+        return result
 
     def get_payment_status(self, lesson_id: int) -> str:
         """Retorna status de pagamento de uma aula."""
@@ -78,9 +113,7 @@ class PaymentService:
         if not lesson:
             raise NotFoundError("Aula não encontrada", 404)
 
-        payment_status = lesson["payment_status"]
-        # Mapeia para minúsculo
-        return payment_status.lower()
+        return lesson["payment_status"].lower()
 
     def _map_billing_type(self, method: str) -> str:
         mapping = {
