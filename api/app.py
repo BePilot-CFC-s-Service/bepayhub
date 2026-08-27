@@ -4,6 +4,7 @@ from errors import ApiError
 from controllers.health_controller import HealthController
 from controllers.customer_controller import CustomerController
 from controllers.payment_controller import PaymentController
+from controllers.instructor_subaccount_controller import InstructorSubaccountController
 
 def create_app() -> Flask:
     app = Flask(__name__)
@@ -36,6 +37,7 @@ def _register_controllers(app: Flask) -> None:
         HealthController(),
         CustomerController(),
         PaymentController(),
+        InstructorSubaccountController(),
     ]
     for controller in controllers:
         app.register_blueprint(
