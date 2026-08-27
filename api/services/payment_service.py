@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
@@ -22,6 +22,10 @@ class PaymentService:
             else:
                 return payment_deadline.strftime("%Y-%m-%d")
         return datetime.now().strftime("%Y-%m-%d")
+
+    def _get_current_iso(self) -> str:
+        """Retorna timestamp atual em ISO 8601."""
+        return datetime.now(timezone.utc).isoformat()
 
     def pay_lesson(self, lesson_id: int, data: dict) -> dict:
         """Processa pagamento de uma aula com split e retorna dados do PIX se aplicável."""
@@ -76,34 +80,67 @@ class PaymentService:
             payment_payload["creditCardHolderInfo"] = data["credit_card_holder_info"]
             payment_payload["remoteIp"] = data.get("remote_ip")
 
+        # Cria a cobrança no Asaas
         asaas_response = self.asaas.create_payment(payment_payload)
-
         mapped_status = map_asaas_status_to_payment_status(asaas_response.get("status", "PENDING"))
 
+        # Prepara dados iniciais do registro (sem QR code ainda)
         payment_record = {
             "lesson_id": lesson_id,
             "bepayhub_transaction_id": asaas_response["id"],
             "amount": lesson["total_price"],
             "status": mapped_status,
             "method": payment_method,
-            "pix_qr_code": asaas_response.get("pixQrCodeUrl"),
-            "pix_copy_paste": asaas_response.get("pixCopiaECola"),
+            "pix_qr_code": None,
+            "pix_copy_paste": None,
             "invoice_url": asaas_response.get("invoiceUrl"),
             "paid_at": asaas_response.get("paidDate"),
+            "created_at": self._get_current_iso(),
+            "updated_at": self._get_current_iso(),
         }
-        self.supabase.insert("payment", payment_record)
+        inserted = self.supabase.insert("payment", payment_record)
 
+        # Atualiza status da aula
         self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": mapped_status})
 
+        # Prepara resposta base
         result = {
             "success": True,
             "payment_id": asaas_response["id"],
         }
 
+        # Se for PIX, busca o QR Code e o Copia e Cola
         if payment_payload["billingType"] == "PIX":
             pix_data = self.asaas.get_pix_qr_code(asaas_response["id"])
-            result["pix_qr_code"] = pix_data.get("encodedImage")
-            result["pix_copy_paste"] = pix_data.get("payload")
+            encoded_image = pix_data.get("encodedImage")
+            payload_text = pix_data.get("payload")
+
+            # Determina o ID do registro inserido para atualização
+            payment_db_id = None
+            if inserted and "id" in inserted:
+                payment_db_id = inserted["id"]
+            else:
+                # Se não retornou, busca pelo transaction_id
+                existing = self.supabase.fetch_one(
+                    "payment",
+                    {"bepayhub_transaction_id": asaas_response["id"]}
+                )
+                if existing:
+                    payment_db_id = existing["id"]
+
+            if payment_db_id is not None:
+                self.supabase.update(
+                    "payment",
+                    {"id": payment_db_id},
+                    {
+                        "pix_qr_code": encoded_image,
+                        "pix_copy_paste": payload_text,
+                        "updated_at": self._get_current_iso(),
+                    }
+                )
+
+            result["pix_qr_code"] = encoded_image
+            result["pix_copy_paste"] = payload_text
 
         return result
 

@@ -5,7 +5,6 @@ from controllers.health_controller import HealthController
 from controllers.customer_controller import CustomerController
 from controllers.payment_controller import PaymentController
 from controllers.instructor_subaccount_controller import InstructorSubaccountController
-from controllers.webhook_controller import WebhookController
 
 def create_app() -> Flask:
     app = Flask(__name__)
@@ -39,7 +38,6 @@ def _register_controllers(app: Flask) -> None:
         CustomerController(),
         PaymentController(),
         InstructorSubaccountController(),
-        WebhookController(),
     ]
     for controller in controllers:
         app.register_blueprint(
