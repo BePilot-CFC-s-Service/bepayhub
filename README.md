@@ -1,4 +1,3 @@
-
 # 💳 BePayHub API - Sistema de Pagamentos BePilot
 
 API REST para gerenciamento de pagamentos de aulas, subcontas de instrutores (**Split**) e repasses, integrada ao **Asaas** e **Supabase**.
@@ -9,14 +8,14 @@ API REST para gerenciamento de pagamentos de aulas, subcontas de instrutores (**
 
 A aplicação segue o padrão de **arquitetura em camadas**:
 
-* **Controllers**: responsáveis pelo roteamento HTTP e pela chamada dos serviços.
-* **Services**: responsáveis pelas regras de negócio, validações e orquestração.
-* **Repositories**: responsáveis pelo acesso aos dados via Supabase e pela integração com o Asaas.
-* **Models/DTOs**: responsáveis pela definição de enums e estruturas de dados.
+- **Controllers**: responsáveis pelo roteamento HTTP e pela chamada dos serviços.
+- **Services**: responsáveis pelas regras de negócio, validações e orquestração.
+- **Repositories**: responsáveis pelo acesso aos dados via Supabase e pela integração com o Asaas.
+- **Models/DTOs**: responsáveis pela definição de enums e estruturas de dados.
 
 ---
 
-## ✨ Novas Funcionalidades
+## ✨ Funcionalidades
 
 ### 👤 Subconta (Wallet) para Instrutores
 
@@ -24,10 +23,10 @@ Permite criar uma subconta **White Label** no Asaas para cada instrutor (MEI).
 
 Ao criar uma subconta:
 
-* É gerado um `walletId` exclusivo.
-* É gerada uma `apiKey` exclusiva.
-* O `walletId` é armazenado no campo `asaas_wallet_id` da tabela `instructor`.
-* A `apiKey` é armazenada no campo `asaas_api_key` da tabela `instructor`.
+- É gerado um `walletId` exclusivo.
+- É gerada uma `apiKey` exclusiva.
+- O `walletId` é armazenado no campo `asaas_wallet_id` da tabela `instructor`.
+- A `apiKey` é armazenada no campo `asaas_api_key` da tabela `instructor`.
 
 ### 💰 Split de Pagamento
 
@@ -35,10 +34,10 @@ Todo pagamento de aula, seja via **PIX** ou **Cartão de Crédito**, utiliza aut
 
 A divisão definida é:
 
-| Destino               | Percentual |
-| --------------------- | ---------: |
-| 🏢 Plataforma BePilot |    **10%** |
-| 👨‍🏫 Instrutor       |    **90%** |
+| Destino | Percentual |
+|---|---:|
+| 🏢 Plataforma BePilot | **10%** |
+| 👨‍🏫 Instrutor | **90%** |
 
 O instrutor recebe os **90% diretamente em sua subconta (wallet)** no Asaas.
 
@@ -96,8 +95,8 @@ Cria um **Customer** no Asaas para um usuário existente (`student` ou `instruct
 
 Os valores possíveis são:
 
-* `student`
-* `instructor`
+- `student`
+- `instructor`
 
 ### Exemplo com cURL
 
@@ -163,13 +162,13 @@ Caso o instrutor já possua uma subconta, a API retornará um erro `400`.
 
 Realiza o pagamento de uma aula com divisão automática dos valores:
 
-* **90%** para o instrutor.
-* **10%** para a plataforma BePilot.
+- **90%** para o instrutor.
+- **10%** para a plataforma BePilot.
 
 O endpoint suporta:
 
-* PIX
-* Cartão de Crédito
+- PIX
+- Cartão de Crédito
 
 ---
 
@@ -192,6 +191,17 @@ curl --request POST \
   --data '{
     "payment_method": "pix"
   }'
+```
+
+### Resposta (exemplo)
+
+```json
+{
+  "success": true,
+  "payment_id": "pay_123456789",
+  "pix_qr_code": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "pix_copy_paste": "00020101021226870014br.gov.bcb.pix..."
+}
 ```
 
 ---
@@ -251,9 +261,12 @@ curl --request POST \
 
 ```json
 {
-  "success": true
+  "success": true,
+  "payment_id": "pay_123456789"
 }
 ```
+
+---
 
 ### ⚠️ Pré-requisito
 
@@ -296,12 +309,12 @@ curl --request GET \
 
 ### Status possíveis
 
-| Status      | Descrição           |
-| ----------- | ------------------- |
-| `paid`      | Pagamento realizado |
-| `pending`   | Pagamento pendente  |
+| Status | Descrição |
+|---|---|
+| `paid` | Pagamento realizado |
+| `pending` | Pagamento pendente |
 | `cancelled` | Pagamento cancelado |
-| `refunded`  | Pagamento estornado |
+| `refunded` | Pagamento estornado |
 
 ---
 
@@ -327,7 +340,8 @@ curl --request GET \
   {
     "instructor_id": 1,
     "lesson_id": 2,
-    "payment_status": "paid"
+    "payment_status": "paid",
+    "total_price": 100.00
   }
 ]
 ```
@@ -354,7 +368,8 @@ curl --request GET \
   {
     "instructor_id": 1,
     "lesson_id": 3,
-    "payment_status": "pending"
+    "payment_status": "pending",
+    "total_price": 100.00
   }
 ]
 ```
@@ -367,9 +382,7 @@ curl --request GET \
 
 ### `POST /instructors/{instructor_id}/payout`
 
-Realiza uma transferência manual para o instrutor.
-
-> ℹ️ Esta funcionalidade continua disponível, mas **não é o foco principal desta atualização**, uma vez que os pagamentos já utilizam o sistema de split do Asaas.
+Realiza uma transferência manual da subconta do instrutor para uma conta bancária cadastrada.
 
 ### Body
 
@@ -401,15 +414,17 @@ curl --request POST \
 }
 ```
 
+> ℹ️ Esta funcionalidade permite que o instrutor realize a transferência dos valores disponíveis na subconta para sua conta bancária.
+
 ---
 
 # 💰 Saldo do Instrutor
 
-## Consultar Saldo
+## Consultar Saldo Financeiro
 
 ### `GET /instructors/{instructor_id}/balance`
 
-Consulta o saldo financeiro do instrutor.
+Consulta a visão financeira consolidada do instrutor, combinando informações do Asaas e do Supabase.
 
 ### Exemplo com cURL
 
@@ -422,19 +437,29 @@ curl --request GET \
 
 ```json
 {
-  "total_earned": 0,
-  "available_amount": 0,
-  "pending_amount": 0
+  "instructor_id": 1,
+  "wallet_id": "844518c7-98c9-4c06-9b84-7dd792ae034d",
+  "balances": {
+    "available": 850.00,
+    "to_receive": 450.00,
+    "estimated": 180.00
+  },
+  "metrics": {
+    "total_earned_history": 5400.00
+  }
 }
 ```
 
 ### Campos
 
-| Campo              | Descrição                      |
-| ------------------ | ------------------------------ |
-| `total_earned`     | Total acumulado pelo instrutor |
-| `available_amount` | Valor atualmente disponível    |
-| `pending_amount`   | Valor ainda pendente           |
+| Campo | Descrição |
+|---|---|
+| `instructor_id` | ID do instrutor |
+| `wallet_id` | ID da subconta (wallet) no Asaas |
+| `available` | Saldo disponível para saque (fonte: Asaas) |
+| `to_receive` | Valores já pagos, aguardando liquidação (fonte: Supabase, 90% das aulas) |
+| `estimated` | Estimativa de aulas pendentes (fonte: Supabase, 90% das aulas) |
+| `total_earned_history` | Total histórico recebido pelo instrutor (fonte: Supabase) |
 
 ---
 
@@ -450,7 +475,7 @@ cp .env.example .env
 
 Depois, preencha as variáveis de ambiente necessárias para o funcionamento da aplicação.
 
-Exemplo:
+### Exemplo
 
 ```env
 ASAAS_API_KEY=your_asaas_api_key
@@ -486,17 +511,17 @@ http://localhost:10000/api/v1
 
 # 📋 Resumo dos Endpoints
 
-| Método | Endpoint                           | Descrição                    |
-| ------ | ---------------------------------- | ---------------------------- |
-| `GET`  | `/health`                          | Verifica a saúde da API      |
-| `POST` | `/customers`                       | Cria um Customer no Asaas    |
-| `POST` | `/instructors/{id}/subaccount`     | Cria subconta do instrutor   |
-| `POST` | `/lessons/{id}/pay`                | Realiza pagamento com Split  |
-| `GET`  | `/lessons/{id}/payment-status`     | Consulta status do pagamento |
-| `GET`  | `/instructors/{id}/lessons/paid`   | Lista aulas pagas            |
-| `GET`  | `/instructors/{id}/lessons/unpaid` | Lista aulas não pagas        |
-| `POST` | `/instructors/{id}/payout`         | Realiza transferência manual |
-| `GET`  | `/instructors/{id}/balance`        | Consulta saldo do instrutor  |
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `GET` | `/health` | Verifica a saúde da API |
+| `POST` | `/customers` | Cria um Customer no Asaas |
+| `POST` | `/instructors/{id}/subaccount` | Cria subconta do instrutor |
+| `POST` | `/lessons/{id}/pay` | Realiza pagamento com Split |
+| `GET` | `/lessons/{id}/payment-status` | Consulta status do pagamento |
+| `GET` | `/instructors/{id}/lessons/paid` | Lista aulas pagas |
+| `GET` | `/instructors/{id}/lessons/unpaid` | Lista aulas não pagas |
+| `POST` | `/instructors/{id}/payout` | Realiza transferência manual |
+| `GET` | `/instructors/{id}/balance` | Consulta saldo financeiro completo |
 
 ---
 
@@ -506,26 +531,26 @@ O fluxo principal para pagamento de uma aula é:
 
 ```text
 ┌─────────────────────┐
-│      Aluno          │
+│       Aluno         │
 └──────────┬──────────┘
            │
            │ Pagamento da aula
            ▼
 ┌─────────────────────┐
-│   BePayHub API      │
+│    BePayHub API     │
 └──────────┬──────────┘
            │
            │ Criação do pagamento
            ▼
 ┌─────────────────────┐
-│       Asaas         │
+│        Asaas        │
 └──────────┬──────────┘
            │
            │ Split automático
            ▼
-     ┌─────┴─────┐
-     │           │
-     ▼           ▼
+      ┌────┴────┐
+      │         │
+      ▼         ▼
 ┌─────────┐ ┌──────────────┐
 │ BePilot │ │  Instrutor   │
 │   10%   │ │     90%      │
@@ -571,14 +596,14 @@ Não coloque chaves de API diretamente no código-fonte ou no repositório Git.
 
 # 🛠️ Tecnologias
 
-* **Python**
-* **REST API**
-* **Asaas**
-* **Supabase**
-* **PostgreSQL**
-* **JSON**
-* **cURL**
-* **Environment Variables**
+- **Python**
+- **REST API**
+- **Asaas**
+- **Supabase**
+- **PostgreSQL**
+- **JSON**
+- **cURL**
+- **Environment Variables**
 
 ---
 
@@ -588,25 +613,25 @@ Não coloque chaves de API diretamente no código-fonte ou no repositório Git.
 
 Responsável por:
 
-* Criação de Customers.
-* Criação de subcontas.
-* Geração de Wallets.
-* Geração de API Keys.
-* Processamento de pagamentos.
-* Pagamentos via PIX.
-* Pagamentos via Cartão.
-* Split de pagamentos.
-* Transferências.
+- Criação de Customers.
+- Criação de subcontas.
+- Geração de Wallets.
+- Geração de API Keys.
+- Processamento de pagamentos.
+- Pagamentos via PIX.
+- Pagamentos via Cartão.
+- Split de pagamentos.
+- Transferências.
 
 ## Supabase
 
 Responsável por:
 
-* Persistência dos dados.
-* Consulta de usuários.
-* Consulta de instrutores.
-* Consulta de aulas.
-* Armazenamento das informações relacionadas às contas Asaas.
+- Persistência dos dados.
+- Consulta de usuários.
+- Consulta de instrutores.
+- Consulta de aulas.
+- Armazenamento das informações relacionadas às contas Asaas.
 
 ---
 
@@ -645,8 +670,8 @@ BePayHub API
 ├── Models
 │   └── Estruturas de dados
 │
-├── DTOs
-│   └── Objetos de transferência
+├── Utils
+│   └── Funções auxiliares
 │
 ├── app.py
 ├── requirements.txt
@@ -707,7 +732,7 @@ Este projeto faz parte do ecossistema **BePilot**.
 
 ## 📌 Versão
 
-**Versão:** `2.1.0`
+**Versão:** `2.2.0`  
 **Última atualização:** `26 de agosto de 2026`
 
 ---
@@ -718,20 +743,19 @@ A **BePayHub API** foi estruturada para centralizar o gerenciamento de pagamento
 
 A implementação contempla:
 
-* ✅ Criação de Customers.
-* ✅ Criação de subcontas para instrutores.
-* ✅ Wallets individuais no Asaas.
-* ✅ Split automático de pagamentos.
-* ✅ Retenção de 10% para a plataforma.
-* ✅ Repasse de 90% para o instrutor.
-* ✅ Pagamentos via PIX.
-* ✅ Pagamentos via Cartão de Crédito.
-* ✅ Consulta de status de pagamentos.
-* ✅ Consulta de aulas pagas e não pagas.
-* ✅ Consulta de saldo.
-* ✅ Transferências manuais.
-* ✅ Integração com Supabase.
-* ✅ Integração com Asaas.
+- ✅ Criação de Customers.
+- ✅ Criação de subcontas para instrutores.
+- ✅ Wallets individuais no Asaas.
+- ✅ Split automático de pagamentos.
+- ✅ Retenção de 10% para a plataforma.
+- ✅ Repasse de 90% para o instrutor.
+- ✅ Pagamentos via PIX.
+- ✅ Pagamentos via Cartão de Crédito.
+- ✅ Consulta de status de pagamentos.
+- ✅ Consulta de aulas pagas e não pagas.
+- ✅ Consulta de saldo financeiro completo.
+- ✅ Transferências manuais.
+- ✅ Integração com Supabase.
+- ✅ Integração com Asaas.
 
 A API está preparada para ser integrada ao restante do ecossistema **BePilot**, mantendo uma arquitetura organizada, modular e orientada à separação de responsabilidades.
-
