@@ -759,3 +759,10 @@ A implementação contempla:
 - ✅ Integração com Asaas.
 
 A API está preparada para ser integrada ao restante do ecossistema **BePilot**, mantendo uma arquitetura organizada, modular e orientada à separação de responsabilidades.
+## CORS
+
+A API usa flask-cors. Configure `CORS_ALLOWED_ORIGINS` (origens separadas por virgula, ex.: `https://aluno.bepilot.com.br,https://instrutor.bepilot.com.br`). Padrao: `http://localhost:5173,http://localhost:3000`. Defina essa variavel no Render.
+
+## Confirmacao de pagamento
+
+Quando o pagamento e confirmado (cartao no ato, ou PIX via `GET /lessons/{id}/payment-status`, que sincroniza com o Asaas), `lesson.payment_status` vira `Paid` e `lesson.status` vira `Scheduled` automaticamente (exceto aulas Cancelled/Completed/NoShow/InProgress).

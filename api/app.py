@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 from config import Settings
 from errors import ApiError
 from controllers.health_controller import HealthController
@@ -10,6 +11,15 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config["DEBUG"] = Settings.DEBUG
     app.config["TESTING"] = Settings.TESTING
+
+    # Preflight (OPTIONS) é respondido automaticamente, inclusive em erros 4xx/5xx.
+    CORS(
+        app,
+        resources={r"/*": {"origins": Settings.CORS_ALLOWED_ORIGINS}},
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+        max_age=600,
+    )
 
     _register_error_handlers(app)
     _register_controllers(app)

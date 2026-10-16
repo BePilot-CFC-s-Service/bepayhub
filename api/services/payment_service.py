@@ -4,7 +4,14 @@ from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
 from utils.validators import validate_required_fields
 from utils.asaas_status import map_asaas_status_to_payment_status
-from models.enums import PaymentStatus
+from models.enums import PaymentStatus, LessonStatus
+
+FINAL_LESSON_STATUSES = {
+    LessonStatus.CANCELLED.value,
+    LessonStatus.COMPLETED.value,
+    LessonStatus.NO_SHOW.value,
+    LessonStatus.IN_PROGRESS.value,
+}
 
 class PaymentService:
     def __init__(self):
@@ -100,8 +107,8 @@ class PaymentService:
         }
         inserted = self.supabase.insert("payment", payment_record)
 
-        # Atualiza status da aula
-        self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": mapped_status})
+        # Atualiza status de pagamento (e da aula, se confirmado)
+        self._apply_payment_status(lesson, mapped_status)
 
         # Prepara resposta base
         result = {
@@ -144,13 +151,51 @@ class PaymentService:
 
         return result
 
+    def _apply_payment_status(self, lesson: dict, payment_status: str) -> None:
+        """Grava o payment_status da aula; pagamento confirmado agenda a aula automaticamente."""
+        changes = {"payment_status": payment_status}
+        if (
+            payment_status == PaymentStatus.PAID.value
+            and lesson.get("status") not in FINAL_LESSON_STATUSES
+        ):
+            changes["status"] = LessonStatus.SCHEDULED.value
+        self.supabase.update("lesson", {"id": lesson["id"]}, changes)
+
     def get_payment_status(self, lesson_id: int) -> str:
-        """Retorna status de pagamento de uma aula."""
+        """Retorna status de pagamento de uma aula, sincronizando com o Asaas enquanto pendente."""
         lesson = self.supabase.fetch_one("lesson", {"id": lesson_id})
         if not lesson:
             raise NotFoundError("Aula não encontrada", 404)
 
+        if lesson["payment_status"] == PaymentStatus.PENDING.value:
+            self._sync_with_asaas(lesson)
+            lesson = self.supabase.fetch_one("lesson", {"id": lesson_id}) or lesson
+
         return lesson["payment_status"].lower()
+
+    def _sync_with_asaas(self, lesson: dict) -> None:
+        """Confirma no Asaas pagamentos PIX/cartão que ainda constam como pendentes (sem webhook)."""
+        payment = self.supabase.fetch_one("payment", {"lesson_id": lesson["id"]})
+        if not payment or not payment.get("bepayhub_transaction_id"):
+            return
+        try:
+            asaas_payment = self.asaas.get_payment(payment["bepayhub_transaction_id"])
+        except Exception:
+            return  # mantém o status atual; nova tentativa no próximo polling
+
+        mapped = map_asaas_status_to_payment_status(asaas_payment.get("status", "PENDING"))
+        if mapped == PaymentStatus.PENDING.value:
+            return
+        self.supabase.update(
+            "payment",
+            {"id": payment["id"]},
+            {
+                "status": mapped,
+                "paid_at": asaas_payment.get("paidDate") or asaas_payment.get("confirmedDate"),
+                "updated_at": self._get_current_iso(),
+            },
+        )
+        self._apply_payment_status(lesson, mapped)
 
     def _map_billing_type(self, method: str) -> str:
         mapping = {
