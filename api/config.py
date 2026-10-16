@@ -16,6 +16,16 @@ class Settings:
     API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
     ENV = os.getenv("ENV", "development")
 
+    # CORS: lista de origens separadas por vírgula (ex.: https://aluno.bepilot.com.br)
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip().rstrip("/")
+        for origin in (
+            os.getenv("CORS_ALLOWED_ORIGINS")
+            or "http://localhost:5173,http://localhost:3000"
+        ).split(",")
+        if origin.strip()
+    ]
+
     # Asaas
     ASAAS_API_URL = (os.getenv("ASAAS_API_URL") or "").rstrip("/")
     ASAAS_API_KEY = os.getenv("ASAAS_API_KEY") or ""

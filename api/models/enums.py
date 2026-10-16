@@ -7,6 +7,16 @@ class PaymentStatus(Enum):
     REFUNDED = "Refunded"
     CANCELLED = "Cancelled"
 
+class LessonStatus(Enum):
+    PENDING = "Pending"
+    SCHEDULED = "Scheduled"
+    AWAITING_PAYMENT = "AwaitingPayment"
+    PAID = "Paid"
+    IN_PROGRESS = "InProgress"
+    COMPLETED = "Completed"
+    CANCELLED = "Cancelled"
+    NO_SHOW = "NoShow"
+
 class PayoutStatus(Enum):
     PENDING = "Pending"
     PROCESSING = "Processing"
