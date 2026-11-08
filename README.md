@@ -320,6 +320,19 @@ curl --request GET \
 
 # 👨‍🏫 Aulas do Instrutor
 
+## Autenticação das rotas financeiras
+
+As rotas financeiras abaixo usam o UUID de `instructor.id`, que deve ser igual
+ao UUID do usuário autenticado no Supabase. Envie
+`Authorization: Bearer <supabase_access_token>` em cada requisição. A API
+valida o token no Supabase Auth (`GET /auth/v1/user`) e verifica o dono:
+token ausente/inválido retorna `401`, outro usuário retorna `403`; falhas
+de comunicação com Auth retornam `502` ou `504`. IDs que não são UUID
+não correspondem às rotas financeiras (`404`).
+
+Isto se aplica a `balance`, `lessons/paid`, `lessons/unpaid`, `payout`,
+`transactions` e `payouts`. Não altera as rotas de pagamento ou subconta.
+
 ## Aulas Pagas
 
 ### `GET /instructors/{instructor_id}/lessons/paid`
@@ -330,7 +343,8 @@ Retorna todas as aulas pagas associadas ao instrutor.
 
 ```bash
 curl --request GET \
-  --url http://localhost:10000/api/v1/instructors/1/lessons/paid
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/lessons/paid \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
 ```
 
 ### Resposta
@@ -338,7 +352,7 @@ curl --request GET \
 ```json
 [
   {
-    "instructor_id": 1,
+    "instructor_id": "11111111-1111-4111-8111-111111111111",
     "lesson_id": 2,
     "payment_status": "paid",
     "total_price": 100.00
@@ -358,7 +372,8 @@ Retorna todas as aulas que ainda não foram pagas.
 
 ```bash
 curl --request GET \
-  --url http://localhost:10000/api/v1/instructors/1/lessons/unpaid
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/lessons/unpaid \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
 ```
 
 ### Resposta
@@ -366,7 +381,7 @@ curl --request GET \
 ```json
 [
   {
-    "instructor_id": 1,
+    "instructor_id": "11111111-1111-4111-8111-111111111111",
     "lesson_id": 3,
     "payment_status": "pending",
     "total_price": 100.00
@@ -383,6 +398,7 @@ curl --request GET \
 ### `POST /instructors/{instructor_id}/payout`
 
 Realiza uma transferência manual da subconta do instrutor para uma conta bancária cadastrada.
+`amount` deve ser um número JSON positivo e finito.
 
 ### Body
 
@@ -396,7 +412,8 @@ Realiza uma transferência manual da subconta do instrutor para uma conta bancá
 
 ```bash
 curl --request POST \
-  --url http://localhost:10000/api/v1/instructors/1/payout \
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/payout \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
   --header 'Content-Type: application/json' \
   --data '{
     "amount": 100.00
@@ -430,14 +447,15 @@ Consulta a visão financeira consolidada do instrutor, combinando informações 
 
 ```bash
 curl --request GET \
-  --url http://localhost:10000/api/v1/instructors/1/balance
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/balance \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
 ```
 
 ### Resposta
 
 ```json
 {
-  "instructor_id": 1,
+  "instructor_id": "11111111-1111-4111-8111-111111111111",
   "wallet_id": "844518c7-98c9-4c06-9b84-7dd792ae034d",
   "balances": {
     "available": 850.00,
@@ -463,6 +481,32 @@ curl --request GET \
 
 ---
 
+# 📜 Histórico financeiro
+
+Ambos os endpoints exigem a autenticação e o UUID descritos acima. Retornam
+diretamente arrays JSON, com no máximo **100** registros, ordenados por
+`created_at` decrescente e, em caso de empate, `id` decrescente. Não há
+paginação; listas vazias retornam `[]`.
+
+### `GET /instructors/{instructor_id}/transactions`
+
+Consulta `instructor_balance_transaction` filtrada pelo `instructor_id`.
+Retorna apenas `id`, `type`, `description`, `amount`, `created_at`.
+
+### `GET /instructors/{instructor_id}/payouts`
+
+Consulta `instructor_payout` filtrada pelo `instructor_id`. Retorna apenas
+`id`, `amount`, `status`, `created_at`. O repositório não contém o schema
+ou uma rotina de gravação de payout: confirme que esta tabela e colunas
+existem e que os repasses são registrados antes de depender do histórico.
+O POST de payout existente não grava registros nesta tabela.
+
+As consultas de histórico usam `SUPABASE_SERVICE_ROLE_KEY` no servidor,
+após validação de identidade e filtro pelo UUID do dono. Nunca envie essa
+chave ao cliente.
+
+---
+
 # ⚙️ Configuração
 
 ## Variáveis de Ambiente
@@ -481,6 +525,7 @@ Depois, preencha as variáveis de ambiente necessárias para o funcionamento da 
 ASAAS_API_KEY=your_asaas_api_key
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 > ⚠️ Nunca versione o arquivo `.env` contendo credenciais reais.
@@ -522,6 +567,8 @@ http://localhost:10000/api/v1
 | `GET` | `/instructors/{id}/lessons/unpaid` | Lista aulas não pagas |
 | `POST` | `/instructors/{id}/payout` | Realiza transferência manual |
 | `GET` | `/instructors/{id}/balance` | Consulta saldo financeiro completo |
+| `GET` | `/instructors/{id}/transactions` | Histórico de transações do instrutor |
+| `GET` | `/instructors/{id}/payouts` | Histórico de repasses do instrutor |
 
 ---
 
@@ -712,14 +759,16 @@ curl --request GET \
 
 ```bash
 curl --request GET \
-  --url http://localhost:10000/api/v1/instructors/1/lessons/paid
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/lessons/paid \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
 ```
 
 ## 5. Consultar saldo
 
 ```bash
 curl --request GET \
-  --url http://localhost:10000/api/v1/instructors/1/balance
+  --url http://localhost:10000/api/v1/instructors/11111111-1111-4111-8111-111111111111/balance \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
 ```
 
 ---
@@ -761,7 +810,12 @@ A implementação contempla:
 A API está preparada para ser integrada ao restante do ecossistema **BePilot**, mantendo uma arquitetura organizada, modular e orientada à separação de responsabilidades.
 ## CORS
 
-A API usa flask-cors. Configure `CORS_ALLOWED_ORIGINS` (origens separadas por virgula, ex.: `https://aluno.bepilot.com.br,https://instrutor.bepilot.com.br`). Padrao: `http://localhost:5173,http://localhost:3000`. Defina essa variavel no Render.
+A API usa flask-cors. O padrão permite `http://localhost:5173`,
+`http://localhost:3000` e `https://instructor.bepilot.com.br`. Configure
+`CORS_ALLOWED_ORIGINS` no Render para substituir a lista inteira (origens
+separadas por vírgula); inclua explicitamente a origem de produção do
+instrutor e quaisquer outras origens necessárias. O preflight permite o
+header `Authorization`.
 
 ## Confirmacao de pagamento
 

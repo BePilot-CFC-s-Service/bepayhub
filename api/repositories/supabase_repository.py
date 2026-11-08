@@ -58,6 +58,7 @@ class SupabaseRepository:
         query: Optional[Dict[str, Any]] = None,
         use_service_role: bool = False,
         prefer_return: bool = False,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """Executa uma requisição genérica ao Supabase."""
         url = cls._build_url(table, query)
@@ -69,6 +70,7 @@ class SupabaseRepository:
                 url=url,
                 headers=headers,
                 json=data,
+                params=params,
                 timeout=10,
             )
 
@@ -108,9 +110,20 @@ class SupabaseRepository:
         return None
 
     @classmethod
-    def fetch_all(cls, table: str, query: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def fetch_all(
+        cls, table: str, query: Optional[Dict[str, Any]] = None,
+        select: Optional[str] = None, order: Optional[str] = None,
+        limit: Optional[int] = None, use_service_role: bool = False,
+    ) -> List[Dict[str, Any]]:
         """Busca todos os registros que atendem aos filtros."""
-        result = cls._request("GET", table, query=query, use_service_role=False)
+        params = {}
+        if select is not None:
+            params["select"] = select
+        if order is not None:
+            params["order"] = order
+        if limit is not None:
+            params["limit"] = limit
+        result = cls._request("GET", table, query=query, use_service_role=use_service_role, params=params or None)
         if isinstance(result, list):
             return result
         return []

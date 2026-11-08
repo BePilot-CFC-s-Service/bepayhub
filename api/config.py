@@ -21,7 +21,7 @@ class Settings:
         origin.strip().rstrip("/")
         for origin in (
             os.getenv("CORS_ALLOWED_ORIGINS")
-            or "http://localhost:5173,http://localhost:3000"
+            or "http://localhost:5173,http://localhost:3000,https://instructor.bepilot.com.br"
         ).split(",")
         if origin.strip()
     ]

@@ -4,6 +4,7 @@ from .base_controller import BaseController
 from services.payment_service import PaymentService
 from services.instructor_service import InstructorService
 from errors import ApiError
+from utils.instructor_auth import require_instructor_owner
 
 class PaymentController(BaseController):
     def __init__(self):
@@ -23,16 +24,22 @@ class PaymentController(BaseController):
 
         # Instructor endpoints
         self.register_route(
-            "/instructors/<int:instructor_id>/lessons/paid", ["GET"], self.get_paid_lessons
+            "/instructors/<uuid:instructor_id>/lessons/paid", ["GET"], require_instructor_owner(self.get_paid_lessons)
         )
         self.register_route(
-            "/instructors/<int:instructor_id>/lessons/unpaid", ["GET"], self.get_unpaid_lessons
+            "/instructors/<uuid:instructor_id>/lessons/unpaid", ["GET"], require_instructor_owner(self.get_unpaid_lessons)
         )
         self.register_route(
-            "/instructors/<int:instructor_id>/payout", ["POST"], self.create_payout
+            "/instructors/<uuid:instructor_id>/payout", ["POST"], require_instructor_owner(self.create_payout)
         )
         self.register_route(
-            "/instructors/<int:instructor_id>/balance", ["GET"], self.get_balance
+            "/instructors/<uuid:instructor_id>/balance", ["GET"], require_instructor_owner(self.get_balance)
+        )
+        self.register_route(
+            "/instructors/<uuid:instructor_id>/transactions", ["GET"], require_instructor_owner(self.get_transactions)
+        )
+        self.register_route(
+            "/instructors/<uuid:instructor_id>/payouts", ["GET"], require_instructor_owner(self.get_payouts)
         )
 
     def pay_lesson(self, lesson_id):
@@ -78,7 +85,7 @@ class PaymentController(BaseController):
     def create_payout(self, instructor_id):
         try:
             data = request.get_json(silent=True)
-            if not data:
+            if not isinstance(data, dict) or not data:
                 raise ApiError("Payload JSON inválido", 400)
 
             result = self.instructor_service.create_payout(instructor_id, data)
@@ -96,3 +103,9 @@ class PaymentController(BaseController):
             return jsonify({"error": e.message, "details": e.details}), e.status_code
         except Exception:
             return jsonify({"error": "Erro interno do servidor"}), 500
+
+    def get_transactions(self, instructor_id):
+        return jsonify(self.instructor_service.get_transactions(instructor_id)), 200
+
+    def get_payouts(self, instructor_id):
+        return jsonify(self.instructor_service.get_payouts(instructor_id)), 200

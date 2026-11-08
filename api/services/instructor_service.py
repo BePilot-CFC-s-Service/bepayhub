@@ -1,3 +1,5 @@
+import math
+
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
@@ -5,11 +7,13 @@ from utils.validators import validate_required_fields
 from models.enums import PaymentStatus
 
 class InstructorService:
+    HISTORY_LIMIT = 100
+
     def __init__(self):
         self.supabase = SupabaseRepository
         self.asaas = AsaasRepository
 
-    def get_lessons_by_payment_status(self, instructor_id: int, paid: bool) -> list:
+    def get_lessons_by_payment_status(self, instructor_id: str, paid: bool) -> list:
         """Retorna lista de aulas pagas ou não pagas para um instrutor."""
         status_filter = PaymentStatus.PAID.value if paid else {"neq": PaymentStatus.PAID.value}
         lessons = self.supabase.fetch_all(
@@ -29,7 +33,7 @@ class InstructorService:
             })
         return result
 
-    def create_payout(self, instructor_id: int, data: dict) -> dict:
+    def create_payout(self, instructor_id: str, data: dict) -> dict:
         """
         Realiza transferência da subconta do instrutor para uma conta bancária real.
         O instrutor deve possuir subconta (asaas_wallet_id e asaas_api_key)
@@ -37,6 +41,14 @@ class InstructorService:
         """
         validate_required_fields(data, ["amount"])
         amount = data["amount"]
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+            raise ValidationError("Valor do payout deve ser um número positivo", 400)
+        try:
+            amount = float(amount)
+        except (ValueError, OverflowError):
+            raise ValidationError("Valor do payout deve ser um número positivo", 400)
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValidationError("Valor do payout deve ser um número positivo", 400)
 
         instructor = self.supabase.fetch_one("instructor", {"id": instructor_id})
         if not instructor:
@@ -85,7 +97,27 @@ class InstructorService:
             "status": "pending",
         }
 
-    def get_balance(self, instructor_id: int) -> dict:
+    def get_transactions(self, instructor_id: str) -> list:
+        return self.supabase.fetch_all(
+            "instructor_balance_transaction",
+            {"instructor_id": instructor_id},
+            select="id,type,description,amount,created_at",
+            order="created_at.desc,id.desc",
+            limit=self.HISTORY_LIMIT,
+            use_service_role=True,
+        )
+
+    def get_payouts(self, instructor_id: str) -> list:
+        return self.supabase.fetch_all(
+            "instructor_payout",
+            {"instructor_id": instructor_id},
+            select="id,amount,status,created_at",
+            order="created_at.desc,id.desc",
+            limit=self.HISTORY_LIMIT,
+            use_service_role=True,
+        )
+
+    def get_balance(self, instructor_id: str) -> dict:
         """
         Consulta o saldo financeiro do instrutor combinando Asaas e Supabase.
         Retorna um payload rico para o dashboard do instrutor.
