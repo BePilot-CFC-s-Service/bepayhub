@@ -207,6 +207,8 @@ curl --request POST \
 
 ## 💳 Pagamento via Cartão de Crédito
 
+O CEP, o número do endereço e o telefone são obtidos do cadastro do aluno. O CPF ou CNPJ do titular continua sendo informado no request.
+
 ### Body
 
 ```json
@@ -222,10 +224,7 @@ curl --request POST \
   "credit_card_holder_info": {
     "name": "João Silva",
     "email": "joao@example.com",
-    "cpfCnpj": "12345678900",
-    "postalCode": "01001000",
-    "addressNumber": "100",
-    "phone": "11999999999"
+    "cpfCnpj": "12345678900"
   }
 }
 ```
@@ -248,10 +247,7 @@ curl --request POST \
     "credit_card_holder_info": {
       "name": "João Silva",
       "email": "joao@example.com",
-      "cpfCnpj": "12345678900",
-      "postalCode": "01001000",
-      "addressNumber": "100",
-      "phone": "11999999999"
+      "cpfCnpj": "12345678900"
     }
   }'
 ```
