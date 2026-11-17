@@ -3,6 +3,7 @@ from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
 from utils.validators import validate_required_fields
 from models.enums import PaymentStatus
+from services.payment_split import estimate_instructor_share
 
 class InstructorService:
     def __init__(self):
@@ -109,14 +110,14 @@ class InstructorService:
             "lesson",
             {"instructor_id": instructor_id, "payment_status": PaymentStatus.PAID.value}
         )
-        to_receive = round(sum(float(lesson.get("total_price", 0.0)) * 0.9 for lesson in paid_lessons), 2)
+        to_receive = round(sum(estimate_instructor_share(lesson.get("total_price", 0.0)) for lesson in paid_lessons), 2)
 
         # 4. Estimativa (aulas Pending aguardando pagamento)
         pending_lessons = self.supabase.fetch_all(
             "lesson",
             {"instructor_id": instructor_id, "payment_status": PaymentStatus.PENDING.value}
         )
-        estimated = round(sum(float(lesson.get("total_price", 0.0)) * 0.9 for lesson in pending_lessons), 2)
+        estimated = round(sum(estimate_instructor_share(lesson.get("total_price", 0.0)) for lesson in pending_lessons), 2)
 
         # 5. Total histórico ganho (fonte: instructor_balance_transaction)
         transactions = self.supabase.fetch_all(

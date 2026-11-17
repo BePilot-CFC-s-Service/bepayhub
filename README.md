@@ -36,10 +36,10 @@ A divisão definida é:
 
 | Destino | Percentual |
 |---|---:|
-| 🏢 Plataforma BePilot | **10%** |
-| 👨‍🏫 Instrutor | **90%** |
+| 🏢 Plataforma BePilot | **15%** |
+| 👨‍🏫 Instrutor | **85%** |
 
-O instrutor recebe os **90% diretamente em sua subconta (wallet)** no Asaas.
+O instrutor recebe os **85% diretamente em sua subconta (wallet)** no Asaas.
 
 ---
 
@@ -162,8 +162,8 @@ Caso o instrutor já possua uma subconta, a API retornará um erro `400`.
 
 Realiza o pagamento de uma aula com divisão automática dos valores:
 
-- **90%** para o instrutor.
-- **10%** para a plataforma BePilot.
+- **85%** para o instrutor.
+- **15%** para a plataforma BePilot.
 
 O endpoint suporta:
 
@@ -457,8 +457,8 @@ curl --request GET \
 | `instructor_id` | ID do instrutor |
 | `wallet_id` | ID da subconta (wallet) no Asaas |
 | `available` | Saldo disponível para saque (fonte: Asaas) |
-| `to_receive` | Valores já pagos, aguardando liquidação (fonte: Supabase, 90% das aulas) |
-| `estimated` | Estimativa de aulas pendentes (fonte: Supabase, 90% das aulas) |
+| `to_receive` | Valores já pagos, aguardando liquidação (fonte: Supabase, 85% das aulas) |
+| `estimated` | Estimativa de aulas pendentes (fonte: Supabase, 85% das aulas) |
 | `total_earned_history` | Total histórico recebido pelo instrutor (fonte: Supabase) |
 
 ---
@@ -553,7 +553,7 @@ O fluxo principal para pagamento de uma aula é:
       ▼         ▼
 ┌─────────┐ ┌──────────────┐
 │ BePilot │ │  Instrutor   │
-│   10%   │ │     90%      │
+│   15%   │ │     85%      │
 └─────────┘ └──────────────┘
                  │
                  ▼
@@ -576,9 +576,9 @@ instructor.asaas_wallet_id
 
 ### Divisão automática
 
-A plataforma retém automaticamente **10%** do valor da aula.
+A plataforma retém automaticamente **15%** do valor da aula.
 
-Os **90% restantes** são direcionados para a wallet do instrutor.
+Os **85% restantes** são direcionados para a wallet do instrutor.
 
 ### Saques
 
@@ -641,8 +641,8 @@ Responsável por:
 2. A subconta do instrutor deve ser criada antes do pagamento da aula.
 3. O instrutor deve ser MEI para criação da subconta.
 4. Todo pagamento de aula deve utilizar o split configurado.
-5. A plataforma recebe 10% do valor da aula.
-6. O instrutor recebe 90% do valor da aula.
+5. A plataforma recebe 15% do valor da aula.
+6. O instrutor recebe 85% do valor da aula.
 7. O pagamento pode ser realizado via PIX ou Cartão de Crédito.
 8. O status do pagamento pode ser consultado posteriormente.
 9. Aulas podem ser filtradas entre pagas e não pagas.
@@ -747,8 +747,8 @@ A implementação contempla:
 - ✅ Criação de subcontas para instrutores.
 - ✅ Wallets individuais no Asaas.
 - ✅ Split automático de pagamentos.
-- ✅ Retenção de 10% para a plataforma.
-- ✅ Repasse de 90% para o instrutor.
+- ✅ Retenção de 15% para a plataforma.
+- ✅ Repasse de 85% para o instrutor.
 - ✅ Pagamentos via PIX.
 - ✅ Pagamentos via Cartão de Crédito.
 - ✅ Consulta de status de pagamentos.
