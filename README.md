@@ -80,6 +80,7 @@ curl --request GET \
 ### `POST /customers`
 
 Cria um **Customer** no Asaas para um usuário existente (`student` ou `instructor`).
+O telefone cadastrado deve conter DDD e 10 ou 11 dígitos. Ele é enviado ao Asaas sem formatação: `phone` para telefone fixo ou `mobilePhone` para celular.
 
 ### Body
 
@@ -207,7 +208,7 @@ curl --request POST \
 
 ## 💳 Pagamento via Cartão de Crédito
 
-O CEP, o número do endereço e o telefone são obtidos do cadastro do aluno. O CPF ou CNPJ do titular continua sendo informado no request.
+O CEP, o número do endereço e o telefone são obtidos do cadastro do aluno. O telefone com DDD é enviado ao Asaas nos dados do titular, conforme exigido pelo processamento de cartão, mesmo quando o customer já existe. O CPF ou CNPJ do titular continua sendo informado no request.
 
 ### Body
 

@@ -88,6 +88,16 @@ class PaymentCardAddressTests(unittest.TestCase):
 
         create_payment.assert_not_called()
 
+    def test_injects_saved_phone_when_client_omits_it(self):
+        self.card_data["credit_card_holder_info"].pop("phone")
+        self.card_data["credit_card_holder_info"].pop("mobilePhone")
+        self.student["phone"] = "21984000000"
+        _, _, create_payment = self._run_payment([{"zip_code": "01234-567", "number": "42"}])
+
+        holder = create_payment.call_args.args[0]["creditCardHolderInfo"]
+        self.assertEqual(holder["phone"], "21984000000")
+        self.assertEqual(holder["cpfCnpj"], "12345678901")
+
     def test_rejects_card_payment_without_valid_saved_phone(self):
         self.student["phone"] = None
         service = PaymentService()
@@ -100,7 +110,7 @@ class PaymentCardAddressTests(unittest.TestCase):
             patch.object(SupabaseRepository, "fetch_all", return_value=[{"zip_code": "01234-567", "number": "42"}]),
             patch.object(AsaasRepository, "create_payment") as create_payment,
         ):
-            with self.assertRaisesRegex(ValidationError, "telefone"):
+            with self.assertRaisesRegex(ValidationError, "(?i)telefone"):
                 service.pay_lesson(self.lesson["id"], self.card_data)
 
         create_payment.assert_not_called()

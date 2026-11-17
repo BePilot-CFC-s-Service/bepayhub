@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
-from utils.validators import validate_required_fields
+from utils.validators import normalize_phone, validate_required_fields
 from utils.asaas_status import map_asaas_status_to_payment_status
 from models.enums import PaymentStatus, LessonStatus
 from services.payment_split import build_asaas_split
@@ -97,12 +97,7 @@ class PaymentService:
                     400,
                 )
 
-            phone = "".join(filter(str.isdigit, str(student.get("phone") or "")))
-            if len(phone) < 10:
-                raise ValidationError(
-                    "Aluno não possui telefone com DDD válido cadastrado para pagamento com cartão",
-                    400,
-                )
+            phone = normalize_phone(student.get("phone"))
 
             holder_info = dict(data["credit_card_holder_info"])
             holder_info["postalCode"] = postal_code

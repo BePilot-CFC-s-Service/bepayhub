@@ -2,7 +2,7 @@
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
 from errors import ValidationError, NotFoundError
-from utils.validators import validate_required_fields
+from utils.validators import normalize_phone, validate_required_fields
 
 class CustomerService:
     def __init__(self):
@@ -24,13 +24,15 @@ class CustomerService:
         if not user_data:
             raise NotFoundError(f"{user_type.capitalize()} não encontrado", 404)
 
+        phone = normalize_phone(user_data.get("phone"))
+
         # Monta payload para Asaas
         customer_payload = {
             "name": f"{user_data['name']} {user_data.get('last_name', '')}".strip(),
             "cpfCnpj": user_data["cpf"],
             "email": user_data["email"],
-            "phone": user_data["phone"],
         }
+        customer_payload["mobilePhone" if len(phone) == 11 else "phone"] = phone
 
         # Adiciona endereço se existir
         address = self.supabase.fetch_one("address", {
