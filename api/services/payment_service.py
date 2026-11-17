@@ -97,9 +97,18 @@ class PaymentService:
                     400,
                 )
 
+            phone = "".join(filter(str.isdigit, str(student.get("phone") or "")))
+            if len(phone) < 10:
+                raise ValidationError(
+                    "Aluno não possui telefone com DDD válido cadastrado para pagamento com cartão",
+                    400,
+                )
+
             holder_info = dict(data["credit_card_holder_info"])
             holder_info["postalCode"] = postal_code
             holder_info["addressNumber"] = address_number
+            holder_info["phone"] = phone
+            holder_info.pop("mobilePhone", None)
             payment_payload["creditCardHolderInfo"] = holder_info
             payment_payload["remoteIp"] = data.get("remote_ip")
 
