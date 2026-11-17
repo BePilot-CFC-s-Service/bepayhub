@@ -72,6 +72,20 @@ class PaymentCardAddressTests(unittest.TestCase):
         self.assertEqual(self.card_data["credit_card_holder_info"]["postalCode"], "99999999")
         self.assertEqual(self.card_data["credit_card_holder_info"]["phone"], "5511999999999")
 
+    def test_uses_saved_eleven_digit_phone_when_request_omits_phone(self):
+        self.student["phone"] = "21987654321"
+        self.card_data["credit_card_holder_info"].pop("phone")
+        self.card_data["credit_card_holder_info"].pop("mobilePhone")
+
+        result, _, create_payment = self._run_payment([
+            {"zip_code": "01234-567", "number": "42"},
+        ])
+
+        self.assertTrue(result["success"])
+        holder = create_payment.call_args.args[0]["creditCardHolderInfo"]
+        self.assertEqual(holder["phone"], "21987654321")
+        self.assertEqual(holder["cpfCnpj"], "12345678901")
+
     def test_rejects_card_payment_without_valid_saved_address(self):
         service = PaymentService()
         with (
