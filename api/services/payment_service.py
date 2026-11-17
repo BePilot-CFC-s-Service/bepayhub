@@ -5,6 +5,7 @@ from errors import ValidationError, NotFoundError
 from utils.validators import validate_required_fields
 from utils.asaas_status import map_asaas_status_to_payment_status
 from models.enums import PaymentStatus, LessonStatus
+from services.payment_split import build_asaas_split
 
 FINAL_LESSON_STATUSES = {
     LessonStatus.CANCELLED.value,
@@ -74,12 +75,7 @@ class PaymentService:
             "externalReference": f"lesson_{lesson_id}",
         }
 
-        payment_payload["split"] = [
-            {
-                "walletId": wallet_id,
-                "percentualValue": 90
-            }
-        ]
+        payment_payload["split"] = build_asaas_split(wallet_id)
 
         if payment_payload["billingType"] == "CREDIT_CARD":
             validate_required_fields(data, ["credit_card", "credit_card_holder_info"])
