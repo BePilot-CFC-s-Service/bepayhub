@@ -23,10 +23,9 @@ Permite criar uma subconta **White Label** no Asaas para cada instrutor (MEI).
 
 Ao criar uma subconta:
 
-- É gerado um `walletId` exclusivo.
-- É gerada uma `apiKey` exclusiva.
-- O `walletId` é armazenado no campo `asaas_wallet_id` da tabela `instructor`.
-- A `apiKey` é armazenada no campo `asaas_api_key` da tabela `instructor`.
+- O Asaas retorna `id` para identificar a subconta e `walletId` para identificar a carteira usada em splits e transferências; somente `walletId` é armazenado em `asaas_wallet_id`.
+- A chave retornada em `accessToken.apiKey` é armazenada no campo `asaas_api_key` da tabela `instructor`.
+- O e-mail e os dados de endereço enviados ao Asaas são os dados do instrutor no banco, sem alias `+bepilot`.
 
 ### 💰 Split de Pagamento
 

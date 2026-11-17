@@ -50,7 +50,7 @@ class AsaasRepository:
             try:
                 response_data = response.json()
             except ValueError:
-                logger.error(f"Asaas response non-JSON (status {response.status_code}): {response.text[:200]}")
+                logger.error("Asaas response non-JSON (status %s)", response.status_code)
                 raise IntegrationError(
                     f"Resposta inesperada do Asaas (status {response.status_code})",
                     status_code=response.status_code,

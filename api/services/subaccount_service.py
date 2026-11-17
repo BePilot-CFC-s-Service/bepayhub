@@ -7,26 +7,10 @@ class SubaccountService:
         self.supabase = SupabaseRepository
         self.asaas = AsaasRepository
 
-    @staticmethod
-    def _generate_alias_email(email: str) -> str:
-        """
-        Gera um e-mail alias para evitar conflito de cadastro no Asaas.
-        Exemplo: instrutor@gmail.com -> instrutor+bepilot@gmail.com
-        Funciona com Gmail e Outlook (mensagens chegam na mesma caixa).
-        """
-        if not email or "@" not in email:
-            return email
-        local, domain = email.split("@", 1)
-        # Se já possui alias, retorna sem duplicar
-        if "+bepilot" in local:
-            return email
-        return f"{local}+bepilot@{domain}"
-
     def create_subaccount(self, instructor_id: int) -> dict:
         """
         Cria uma subconta (wallet) no Asaas para o instrutor.
         O instrutor deve ser MEI (Pessoa Jurídica) e possuir CNPJ válido.
-        Utiliza um alias de e-mail para reutilizar o mesmo endereço sem conflitos.
         """
         # Busca instrutor no Supabase
         instructor = self.supabase.fetch_one("instructor", {"id": instructor_id})
@@ -45,9 +29,6 @@ class SubaccountService:
                 400
             )
 
-        # Gera alias de e-mail para evitar duplicidade no Asaas
-        alias_email = self._generate_alias_email(instructor["email"])
-
         # Busca endereço do instrutor
         address = self.supabase.fetch_one("address", {
             "owner_id": instructor_id,
@@ -59,7 +40,7 @@ class SubaccountService:
         # Monta payload base (campos obrigatórios para MEI)
         payload = {
             "name": f"{instructor['name']} {instructor.get('last_name', '')}".strip(),
-            "email": alias_email,
+            "email": instructor["email"],
             "cpfCnpj": cnpj,
             "phone": instructor.get("phone", ""),
             "mobilePhone": instructor.get("phone", ""),  # Asaas exige mobilePhone
@@ -89,9 +70,14 @@ class SubaccountService:
         # Chama API Asaas para criar subconta
         asaas_response = self.asaas.create_subaccount(payload)
 
-        # Extrai walletId e apiKey da resposta
-        wallet_id = asaas_response.get("id")
-        api_key = asaas_response.get("apiKey")
+        # O id identifica a subconta; walletId é usado em splits e transferências.
+        wallet_id = asaas_response.get("walletId")
+        access_token = asaas_response.get("accessToken")
+        api_key = (
+            access_token.get("apiKey")
+            if isinstance(access_token, dict)
+            else None
+        ) or asaas_response.get("apiKey")
         if not wallet_id or not api_key:
             raise IntegrationError("Resposta inválida da Asaas ao criar subconta", 500)
 

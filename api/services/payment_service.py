@@ -80,7 +80,27 @@ class PaymentService:
         if payment_payload["billingType"] == "CREDIT_CARD":
             validate_required_fields(data, ["credit_card", "credit_card_holder_info"])
             payment_payload["creditCard"] = data["credit_card"]
-            payment_payload["creditCardHolderInfo"] = data["credit_card_holder_info"]
+            student_addresses = self.supabase.fetch_all("address", {
+                "owner_id": lesson["student_id"],
+                "owner_type": "Student",
+            })
+            student_address = max(
+                student_addresses,
+                key=lambda address: address.get("updated_at") or "",
+                default=None,
+            )
+            postal_code = "".join(filter(str.isdigit, str((student_address or {}).get("zip_code") or "")))
+            address_number = str((student_address or {}).get("number") or "").strip()
+            if len(postal_code) != 8 or not address_number:
+                raise ValidationError(
+                    "Aluno não possui CEP e número de endereço válidos cadastrados para pagamento com cartão",
+                    400,
+                )
+
+            holder_info = dict(data["credit_card_holder_info"])
+            holder_info["postalCode"] = postal_code
+            holder_info["addressNumber"] = address_number
+            payment_payload["creditCardHolderInfo"] = holder_info
             payment_payload["remoteIp"] = data.get("remote_ip")
 
         # Cria a cobrança no Asaas
