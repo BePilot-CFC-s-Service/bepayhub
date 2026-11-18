@@ -34,6 +34,32 @@ class PaymentPixRetryTests(unittest.TestCase):
             self.service.pay_lesson(95, {"payment_method": "pix"})
         self.service.asaas.create_payment.assert_not_called()
 
+    def test_reuses_cached_qr_without_provider_call(self):
+        self.service.supabase.fetch_all_service_role.return_value[0].update({
+            "pix_qr_code": "cached-qr",
+            "pix_copy_paste": "cached-payload",
+        })
+
+        result = self.service.pay_lesson(95, {"payment_method": "pix"})
+
+        self.assertEqual(result["pix_copy_paste"], "cached-payload")
+        self.service.asaas.get_pix_qr_code.assert_not_called()
+        self.service.supabase.update.assert_not_called()
+
+    def test_invalid_action_is_reported_without_creating_another_charge(self):
+        self.service.asaas.get_pix_qr_code.side_effect = IntegrationError(
+            "Erro Asaas: Erro desconhecido",
+            400,
+            details=[{"code": "invalid_action", "description": "erro do provedor"}],
+        )
+
+        with self.assertRaisesRegex(IntegrationError, "cobrança existente foi preservada") as captured:
+            self.service.pay_lesson(95, {"payment_method": "pix"})
+
+        self.assertEqual(captured.exception.status_code, 503)
+        self.assertEqual(captured.exception.details[0]["code"], "pix_qr_unavailable")
+        self.service.asaas.create_payment.assert_not_called()
+
     def test_retry_after_qr_timeout_reuses_first_charge(self):
         lesson = {"id": 95, "student_id": 21, "instructor_id": 32, "payment_status": "Pending", "total_price": 105}
         records = {

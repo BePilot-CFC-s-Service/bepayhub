@@ -163,9 +163,7 @@ class PaymentService:
 
         # Se for PIX, busca o QR Code e o Copia e Cola
         if payment_payload["billingType"] == "PIX":
-            pix_data = self.asaas.get_pix_qr_code(asaas_response["id"])
-            if not isinstance(pix_data, dict) or not pix_data.get("encodedImage") or not pix_data.get("payload"):
-                raise IntegrationError("QR Code PIX indisponível para a cobrança existente", 502)
+            pix_data = self._get_pix_qr_data(asaas_response["id"])
             encoded_image = pix_data.get("encodedImage")
             payload_text = pix_data.get("payload")
 
@@ -198,6 +196,32 @@ class PaymentService:
 
         return result
 
+    def _get_pix_qr_data(self, payment_id: str) -> dict:
+        try:
+            pix_data = self.asaas.get_pix_qr_code(payment_id)
+        except IntegrationError as error:
+            if error.status_code == 400 and any(
+                isinstance(detail, dict) and detail.get("code") == "invalid_action"
+                for detail in error.details or []
+            ):
+                raise IntegrationError(
+                    "QR Code PIX indisponível no Asaas; a cobrança existente foi preservada. "
+                    "Verifique a configuração Pix do recebedor e tente novamente após a correção.",
+                    status_code=503,
+                    details=[{
+                        "code": "pix_qr_unavailable",
+                        "description": "O Asaas recusou a geração do QR Code sem cancelar a cobrança.",
+                    }],
+                ) from error
+            raise
+        if (
+            not isinstance(pix_data, dict)
+            or not pix_data.get("encodedImage")
+            or not pix_data.get("payload")
+        ):
+            raise IntegrationError("QR Code PIX indisponível para a cobrança existente", 502)
+        return pix_data
+
     def _reuse_pending_pix(self, lesson_id: int, payment: dict) -> dict:
         payment_id = payment.get("bepayhub_transaction_id")
         if not payment_id or not payment.get("id"):
@@ -213,9 +237,17 @@ class PaymentService:
         ):
             raise ValidationError("Cobrança PIX pendente divergente; requer conciliação", 409)
 
-        pix_data = self.asaas.get_pix_qr_code(payment_id)
-        if not isinstance(pix_data, dict) or not pix_data.get("encodedImage") or not pix_data.get("payload"):
-            raise IntegrationError("QR Code PIX indisponível para a cobrança existente", 502)
+        saved_image = payment.get("pix_qr_code")
+        saved_payload = payment.get("pix_copy_paste")
+        if saved_image and saved_payload:
+            return {
+                "success": True,
+                "payment_id": payment_id,
+                "pix_qr_code": saved_image,
+                "pix_copy_paste": saved_payload,
+            }
+
+        pix_data = self._get_pix_qr_data(payment_id)
         self.supabase.update("payment", {"id": payment["id"]}, {
             "pix_qr_code": pix_data["encodedImage"],
             "pix_copy_paste": pix_data["payload"],

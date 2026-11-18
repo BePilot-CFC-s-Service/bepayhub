@@ -217,9 +217,11 @@ Contrato oficial consultado: [mecanismo para validação de saques via webhooks]
 
 ## 🔑 Pagamento via PIX
 
-O tempo limite da consulta ao QR Code é configurado por `ASAAS_PIX_QR_TIMEOUT` em segundos (padrão: 30), independentemente do timeout de criação da cobrança. Se houver exatamente um PIX pendente já registrado para a aula, uma nova solicitação consulta novamente o QR dessa cobrança em vez de criar outra. Cobranças pendentes ambíguas exigem conciliação.
+O tempo limite da consulta ao QR Code é configurado por `ASAAS_PIX_QR_TIMEOUT` em segundos (padrão: 30), independentemente do timeout de criação da cobrança. Se houver exatamente um PIX pendente já registrado para a aula, uma nova solicitação reutiliza o QR salvo ou consulta novamente a mesma cobrança em vez de criar outra. Cobranças pendentes ambíguas exigem conciliação.
 
 Se ocorrer timeout durante a criação da cobrança, o Asaas pode tê-la criado mesmo sem devolver resposta. Nesse caso, consulte a referência da aula no Asaas antes de tentar novamente; a recuperação automática descrita acima depende de a cobrança já estar registrada no banco e não garante idempotência para criações simultâneas ou não registradas.
+
+Se o Asaas responder `invalid_action` ao endpoint de QR Code, o BePayHub preserva a cobrança existente e responde com `503` e o código `pix_qr_unavailable`; ele não cria outra cobrança nem transforma a falha em pagamento aprovado. Verifique se a conta emissora está aprovada, se possui chave Pix ativa e, se necessário, consulte o suporte do Asaas. Uma chave ativada depois não corrige necessariamente QR Codes de cobranças anteriores no Sandbox; nesse caso, concilie a cobrança antiga antes de gerar uma nova.
 
 ### Body
 
