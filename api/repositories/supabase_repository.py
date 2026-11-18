@@ -108,6 +108,22 @@ class SupabaseRepository:
         return None
 
     @classmethod
+    def fetch_one_service_role(cls, table: str, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        result = cls._request("GET", table, query=query, use_service_role=True)
+        if isinstance(result, list) and result:
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        return None
+
+    @classmethod
+    def fetch_all_service_role(cls, table: str, query: Dict[str, Any]) -> List[Dict[str, Any]]:
+        result = cls._request("GET", table, query=query, use_service_role=True)
+        if not isinstance(result, list):
+            raise IntegrationError("Resposta inesperada do Supabase", 500)
+        return result
+
+    @classmethod
     def fetch_all(cls, table: str, query: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Busca todos os registros que atendem aos filtros."""
         result = cls._request("GET", table, query=query, use_service_role=False)

@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from repositories.supabase_repository import SupabaseRepository
 from repositories.asaas_repository import AsaasRepository
-from errors import ValidationError, NotFoundError
+from errors import ValidationError, NotFoundError, IntegrationError
 from utils.validators import validate_required_fields
 from utils.asaas_status import map_asaas_status_to_payment_status
 from models.enums import PaymentStatus, LessonStatus
@@ -185,6 +186,95 @@ class PaymentService:
         ):
             changes["status"] = LessonStatus.SCHEDULED.value
         self.supabase.update("lesson", {"id": lesson["id"]}, changes)
+
+    def request_refund(self, lesson_id: int) -> dict:
+        lesson = self.supabase.fetch_one_service_role("lesson", {"id": lesson_id})
+        if not lesson:
+            raise NotFoundError("Aula não encontrada", 404)
+        if lesson.get("status") != LessonStatus.CANCELLED.value:
+            raise ValidationError("Somente aulas canceladas podem ser estornadas", 400)
+
+        payments = self.supabase.fetch_all_service_role("payment", {"lesson_id": lesson_id})
+        paid = [payment for payment in payments if payment.get("status") == PaymentStatus.PAID.value]
+        if len(paid) != 1 or not paid[0].get("bepayhub_transaction_id"):
+            raise ValidationError("A aula deve possuir exatamente um pagamento confirmado", 409)
+        payment = paid[0]
+        payment_id = payment["bepayhub_transaction_id"]
+        provider_payment = self.asaas.get_payment(payment_id)
+        eligible_statuses = {"PIX": ("RECEIVED",), "CREDIT_CARD": ("CONFIRMED", "RECEIVED")}
+        if (
+            not isinstance(provider_payment, dict)
+            or provider_payment.get("id") != payment_id
+            or provider_payment.get("externalReference") != f"lesson_{lesson_id}"
+            or provider_payment.get("status") not in eligible_statuses.get(provider_payment.get("billingType"), ())
+        ):
+            raise ValidationError("Cobrança no Asaas não corresponde à aula paga; requer conciliação", 409)
+        try:
+            local_amount = Decimal(str(payment["amount"]))
+            provider_amount = Decimal(str(provider_payment["value"]))
+            if not local_amount.is_finite() or not provider_amount.is_finite() or local_amount <= 0 or local_amount != provider_amount:
+                raise ValueError("Valores divergentes")
+        except (KeyError, InvalidOperation, ValueError):
+            raise ValidationError("Valor da cobrança diverge do pagamento; requer conciliação", 409)
+        refunds = self.asaas.get_payment_refunds(payment_id)
+        if not isinstance(refunds, dict) or not isinstance(refunds.get("data"), list):
+            raise IntegrationError("Resposta inválida do Asaas ao consultar estornos", 502)
+        if refunds["data"] or refunds.get("hasMore"):
+            raise ValidationError("A cobrança já possui histórico de estorno; requer conciliação", 409)
+
+        try:
+            lock = self.supabase.insert("lesson_refund_requests", {
+                "lesson_id": lesson_id,
+                "payment_id": payment["id"],
+            })
+        except IntegrationError as error:
+            if error.status_code == 409:
+                raise ValidationError("Estorno já solicitado; consulte sua situação", 409) from error
+            raise
+        if not lock:
+            raise IntegrationError("Não foi possível registrar a tentativa de estorno", 500)
+
+        self.asaas.refund_payment(payment_id)
+        return {"status": "pending"}
+
+    def get_refund_status(self, lesson_id: int) -> dict:
+        attempt = self.supabase.fetch_one_service_role("lesson_refund_requests", {"lesson_id": lesson_id})
+        if not attempt:
+            raise NotFoundError("Solicitação de estorno não encontrada", 404)
+        payment = self.supabase.fetch_one_service_role("payment", {"id": attempt["payment_id"], "lesson_id": lesson_id})
+        if not payment or not payment.get("bepayhub_transaction_id"):
+            raise IntegrationError("Pagamento associado ao estorno não encontrado", 500)
+
+        refunds = self.asaas.get_payment_refunds(payment["bepayhub_transaction_id"])
+        if not isinstance(refunds, dict) or not isinstance(refunds.get("data"), list):
+            raise IntegrationError("Resposta inválida do Asaas ao consultar estornos", 502)
+        if refunds.get("hasMore"):
+            return {"status": "manual_review"}
+        entries = refunds["data"]
+        if not entries:
+            return {"status": "unknown"}
+        if any(not isinstance(entry, dict) for entry in entries):
+            raise IntegrationError("Resposta inválida do Asaas ao consultar estornos", 502)
+        if any(entry.get("status") == "PENDING" for entry in entries):
+            return {"status": "pending"}
+        if any(entry.get("status") not in ("DONE", "CANCELLED") for entry in entries):
+            return {"status": "manual_review"}
+
+        try:
+            amount = Decimal(str(payment["amount"]))
+            values = [Decimal(str(entry["value"])) for entry in entries if entry.get("status") == "DONE"]
+            if not amount.is_finite() or any(not value.is_finite() or value < 0 for value in values):
+                raise ValueError("Valores não finitos ou negativos")
+            refunded = sum(values, Decimal("0"))
+        except (KeyError, InvalidOperation, ValueError):
+            raise IntegrationError("Valores de estorno inválidos", 502)
+        if amount > 0 and refunded == amount:
+            if not self.supabase.update("payment", {"id": payment["id"]}, {"status": PaymentStatus.REFUNDED.value}):
+                raise IntegrationError("Não foi possível atualizar o pagamento estornado", 500)
+            if not self.supabase.update("lesson", {"id": lesson_id}, {"payment_status": PaymentStatus.REFUNDED.value}):
+                raise IntegrationError("Não foi possível atualizar a aula estornada", 500)
+            return {"status": "refunded"}
+        return {"status": "manual_review"}
 
     def get_payment_status(self, lesson_id: int) -> str:
         """Retorna status de pagamento de uma aula, sincronizando com o Asaas enquanto pendente."""

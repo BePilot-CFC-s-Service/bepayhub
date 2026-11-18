@@ -31,7 +31,7 @@ Ao criar uma subconta:
 
 Todo pagamento de aula, seja via **PIX** ou **Cartão de Crédito**, utiliza automaticamente o sistema de split.
 
-A divisão definida é:
+A divisão definida sobre o valor líquido da cobrança, após as taxas do Asaas, é:
 
 | Destino | Percentual |
 |---|---:|
@@ -168,6 +168,48 @@ O endpoint suporta:
 
 - PIX
 - Cartão de Crédito
+
+## Estorno de aula cancelada
+
+`POST /lessons/{lesson_id}/refund` solicita o estorno integral ao Asaas para uma aula cancelada com exatamente um pagamento confirmado. A resposta `202` indica apenas que a solicitação foi enviada, não que o valor já foi devolvido.
+
+`GET /lessons/{lesson_id}/refund` consulta o processamento: `pending`, `refunded`, `unknown` ou `manual_review`. O pagamento e a aula só são marcados como `Refunded` quando o Asaas confirma estornos `DONE` que somam o valor integral. Consulte esta rota para conciliar o resultado após a solicitação.
+
+As duas rotas exigem `Authorization: Bearer <chave>` com a variável de ambiente `BEPAYHUB_REFUND_API_KEY`, de pelo menos 32 caracteres. Configure uma chave aleatória como segredo do servidor e mantenha-a fora dos aplicativos cliente. Sem a chave, as rotas retornam `503`.
+
+```bash
+curl --request POST \
+  --url http://localhost:10000/api/v1/lessons/1/refund \
+  --header "Authorization: Bearer $BEPAYHUB_REFUND_API_KEY"
+
+curl --request GET \
+  --url http://localhost:10000/api/v1/lessons/1/refund \
+  --header "Authorization: Bearer $BEPAYHUB_REFUND_API_KEY"
+```
+
+Antes de habilitar o recurso, aplique a migration em `supabase/migrations/` no ambiente autorizado e configure a service role do Supabase. Ela cria um registro único por aula e pagamento para impedir solicitações duplicadas entre instâncias. Após timeout, falha ambígua, histórico anterior ou estorno parcial, não reenvie automaticamente: consulte o Asaas e faça a conciliação operacional antes de qualquer nova tentativa. A migration não é aplicada automaticamente pela API.
+
+## Antecipação de cartão
+
+`GET /anticipations/configuration` consulta a configuração automática da conta principal. `GET /instructors/{id}/anticipations/configuration` consulta a subconta usando a credencial do instrutor, sem retorná-la na resposta.
+
+`POST /lessons/{id}/anticipations/simulate` simula na conta emissora. Se a cobrança de cartão pertence a um parcelamento, utiliza `installment` para simular o conjunto; caso contrário, utiliza `payment` para a cobrança avulsa. A resposta inclui o escopo, as condições informadas pelo Asaas e `isDocumentationRequired`. A simulação não solicita antecipação e não está disponível no sandbox do Asaas.
+
+As rotas exigem `Authorization: Bearer <chave>` com `BEPAYHUB_ANTICIPATION_API_KEY` de pelo menos 32 caracteres, configurada como segredo de servidor distinto da chave de estorno. Sem a chave retornam `503`. Antecipação automática habilitada não garante antecipação de todas as cobranças: o Asaas verifica elegibilidade e limites. A API não ativa a configuração nem solicita antecipações financeiras automaticamente.
+
+Para um split `CANCELLED`, consulte `split.cancellationReason` na cobrança do Asaas. `EXTERNAL_AUTHORIZATION_REFUSED` indica recusa ou falha da validação de saque externa: revise a opção de autorização de splits e o webhook de segurança configurado na conta principal antes de novas cobranças. Não aprove operações desconhecidas automaticamente.
+
+### Webhook de validação de split
+
+`POST /asaas/withdrawal-validation` recebe o webhook de validação de saque do Asaas. Configure `ASAAS_WITHDRAWAL_WEBHOOK_TOKEN` como segredo do servidor, igual ao token definido no Asaas; o token é validado no cabeçalho `asaas-access-token` e não deve ser colocado no código ou em aplicativos cliente.
+
+A validação de saque é configurada em **Integrações > Mecanismos de segurança** no Asaas e é distinta dos webhooks comuns de eventos. A URL pública deve apontar para `/api/v1/asaas/withdrawal-validation` somente depois do deploy e da configuração do segredo.
+
+A rota aprova somente eventos `PAYMENT_SPLIT` cuja cobrança, aula, carteira do instrutor, percentual e valor líquido coincidam com os registros internos e a consulta ao Asaas. Operações divergentes recebem `REFUSED`; falhas de consulta retornam `503` para nova tentativa. O token, a service role do Supabase e uma URL pública acessível precisam estar configurados antes de apontar o mecanismo do Asaas para esta rota.
+
+Em caso de recusa, consulte nos logs do servidor o código de motivo da validação. Os logs não incluem o token, o conteúdo do evento ou os identificadores da cobrança e da carteira.
+
+O mecanismo de validação de saques do Asaas pode se aplicar a outras operações da conta principal e das subcontas. Esta rota **não autoriza transferências, pagamentos de contas ou estornos PIX**; conectá-la como validador global poderá bloquear essas operações. Avalie e implemente as regras de validação necessárias antes de habilitá-la em produção. Uma cobrança cujo split já foi cancelado precisa ser conciliada separadamente; esta rota não recria o split.
 
 ---
 
@@ -513,6 +555,12 @@ http://localhost:10000/api/v1
 | `POST` | `/instructors/{id}/subaccount` | Cria subconta do instrutor |
 | `POST` | `/lessons/{id}/pay` | Realiza pagamento com Split |
 | `GET` | `/lessons/{id}/payment-status` | Consulta status do pagamento |
+| `POST` | `/lessons/{id}/refund` | Solicita estorno integral de aula cancelada (chave de serviço) |
+| `GET` | `/lessons/{id}/refund` | Consulta e concilia a situação do estorno (chave de serviço) |
+| `GET` | `/anticipations/configuration` | Consulta antecipação automática da conta principal (chave de serviço) |
+| `GET` | `/instructors/{id}/anticipations/configuration` | Consulta antecipação automática da subconta (chave de serviço) |
+| `POST` | `/lessons/{id}/anticipations/simulate` | Simula antecipação de cartão na conta emissora (chave de serviço) |
+| `POST` | `/asaas/withdrawal-validation` | Valida eventos de split do webhook de segurança do Asaas |
 | `GET` | `/instructors/{id}/lessons/paid` | Lista aulas pagas |
 | `GET` | `/instructors/{id}/lessons/unpaid` | Lista aulas não pagas |
 | `POST` | `/instructors/{id}/payout` | Realiza transferência manual |
