@@ -6,6 +6,22 @@ from repositories.asaas_repository import AsaasRepository
 
 
 class AsaasRepositoryTests(unittest.TestCase):
+    def test_pix_qr_uses_its_own_timeout(self):
+        with patch.object(AsaasRepository, "_request", return_value={"payload": "test"}) as request:
+            AsaasRepository.get_pix_qr_code("pay-test")
+
+        request.assert_called_once_with(
+            "GET", "/payments/pay-test/pixQrCode", timeout=AsaasRepository.PIX_QR_TIMEOUT
+        )
+
+    def test_other_requests_keep_default_timeout(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {"id": "pay-test"}
+        with patch("repositories.asaas_repository.requests.request", return_value=response) as request:
+            AsaasRepository.get_payment("pay-test")
+
+        self.assertEqual(request.call_args.kwargs["timeout"], AsaasRepository.TIMEOUT)
+
     def test_anticipation_configuration_uses_requested_account(self):
         with patch.object(AsaasRepository, "_request", return_value={"creditCardAutomaticEnabled": True}) as request:
             result = AsaasRepository.get_anticipation_configuration(api_key="subaccount-test-key")

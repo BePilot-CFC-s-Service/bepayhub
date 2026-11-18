@@ -49,6 +49,17 @@ class PaymentService:
         if lesson["payment_status"] == PaymentStatus.PAID.value:
             return {"success": False, "error": "Aula já paga"}
 
+        if payment_method == "pix":
+            pending_pix = self.supabase.fetch_all_service_role("payment", {
+                "lesson_id": lesson_id,
+                "status": PaymentStatus.PENDING.value,
+                "method": "pix",
+            })
+            if len(pending_pix) > 1:
+                raise ValidationError("Mais de uma cobrança PIX pendente; requer conciliação", 409)
+            if pending_pix:
+                return self._reuse_pending_pix(lesson_id, pending_pix[0])
+
         # Busca student para obter customer_id
         student = self.supabase.fetch_one("student", {"id": lesson["student_id"]})
         if not student or not student.get("bepayhub_customer_id"):
@@ -114,7 +125,15 @@ class PaymentService:
             payment_payload["remoteIp"] = data.get("remote_ip")
 
         # Cria a cobrança no Asaas
-        asaas_response = self.asaas.create_payment(payment_payload)
+        try:
+            asaas_response = self.asaas.create_payment(payment_payload)
+        except IntegrationError as error:
+            if payment_payload["billingType"] == "PIX" and error.status_code == 504:
+                raise IntegrationError(
+                    "Criação do PIX não confirmada; consulte a cobrança no Asaas antes de tentar novamente",
+                    504,
+                ) from error
+            raise
         mapped_status = map_asaas_status_to_payment_status(asaas_response.get("status", "PENDING"))
 
         # Prepara dados iniciais do registro (sem QR code ainda)
@@ -145,6 +164,8 @@ class PaymentService:
         # Se for PIX, busca o QR Code e o Copia e Cola
         if payment_payload["billingType"] == "PIX":
             pix_data = self.asaas.get_pix_qr_code(asaas_response["id"])
+            if not isinstance(pix_data, dict) or not pix_data.get("encodedImage") or not pix_data.get("payload"):
+                raise IntegrationError("QR Code PIX indisponível para a cobrança existente", 502)
             encoded_image = pix_data.get("encodedImage")
             payload_text = pix_data.get("payload")
 
@@ -176,6 +197,36 @@ class PaymentService:
             result["pix_copy_paste"] = payload_text
 
         return result
+
+    def _reuse_pending_pix(self, lesson_id: int, payment: dict) -> dict:
+        payment_id = payment.get("bepayhub_transaction_id")
+        if not payment_id or not payment.get("id"):
+            raise IntegrationError("Cobrança PIX pendente incompleta; requer conciliação", 409)
+
+        provider_payment = self.asaas.get_payment(payment_id)
+        if (
+            not isinstance(provider_payment, dict)
+            or provider_payment.get("id") != payment_id
+            or provider_payment.get("externalReference") != f"lesson_{lesson_id}"
+            or provider_payment.get("billingType") != "PIX"
+            or provider_payment.get("status") != "PENDING"
+        ):
+            raise ValidationError("Cobrança PIX pendente divergente; requer conciliação", 409)
+
+        pix_data = self.asaas.get_pix_qr_code(payment_id)
+        if not isinstance(pix_data, dict) or not pix_data.get("encodedImage") or not pix_data.get("payload"):
+            raise IntegrationError("QR Code PIX indisponível para a cobrança existente", 502)
+        self.supabase.update("payment", {"id": payment["id"]}, {
+            "pix_qr_code": pix_data["encodedImage"],
+            "pix_copy_paste": pix_data["payload"],
+            "updated_at": self._get_current_iso(),
+        })
+        return {
+            "success": True,
+            "payment_id": payment_id,
+            "pix_qr_code": pix_data["encodedImage"],
+            "pix_copy_paste": pix_data["payload"],
+        }
 
     def _apply_payment_status(self, lesson: dict, payment_status: str) -> None:
         """Grava o payment_status da aula; pagamento confirmado agenda a aula automaticamente."""
