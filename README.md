@@ -205,11 +205,13 @@ Para um split `CANCELLED`, consulte `split.cancellationReason` na cobrança do A
 
 A validação de saque é configurada em **Integrações > Mecanismos de segurança** no Asaas e é distinta dos webhooks comuns de eventos. A URL pública deve apontar para `/api/v1/asaas/withdrawal-validation` somente depois do deploy e da configuração do segredo.
 
-A rota aprova somente eventos `PAYMENT_SPLIT` cuja cobrança, aula, carteira do instrutor, percentual e valor líquido coincidam com os registros internos e a consulta ao Asaas. Operações divergentes recebem `REFUSED`; falhas de consulta retornam `503` para nova tentativa. O token, a service role do Supabase e uma URL pública acessível precisam estar configurados antes de apontar o mecanismo do Asaas para esta rota.
+A rota aprova somente eventos `PAYMENT_SPLIT` cuja cobrança, aula, carteira do instrutor, referência externa, percentual e valor líquido coincidam com os registros internos, o corpo do evento e a consulta ao Asaas. A parcela de 85% é calculada sobre `netValue` com arredondamento monetário `ROUND_HALF_UP`. Operações divergentes recebem `200` com `status: REFUSED` e um motivo genérico; falhas temporárias ou configuração incompleta retornam `503` sem aprovação. O token, a service role do Supabase e uma URL pública acessível precisam estar configurados antes de apontar o mecanismo do Asaas para esta rota.
 
 Em caso de recusa, consulte nos logs do servidor o código de motivo da validação. Os logs não incluem o token, o conteúdo do evento ou os identificadores da cobrança e da carteira.
 
-O mecanismo de validação de saques do Asaas pode se aplicar a outras operações da conta principal e das subcontas. Esta rota **não autoriza transferências, pagamentos de contas ou estornos PIX**; conectá-la como validador global poderá bloquear essas operações. Avalie e implemente as regras de validação necessárias antes de habilitá-la em produção. Uma cobrança cujo split já foi cancelado precisa ser conciliada separadamente; esta rota não recria o split.
+O mecanismo de validação de saques do Asaas abrange também `TRANSFER`, `BILL`, `PIX_QR_CODE` e `MOBILE_PHONE_RECHARGE`. `PIX_REFUND` depende da opção correspondente. A configuração da conta principal é aplicada às subcontas, inclusive BaaS. Esta rota **não autoriza** essas outras operações: conectá-la como validador global recusará as tentativas de payout que a aplicação envia como transferências. Não habilite a opção global até definir e implementar uma regra verificável para essas operações. Uma cobrança cujo split já foi cancelado precisa ser conciliada separadamente; esta rota não recria o split.
+
+Contrato oficial consultado: [mecanismo para validação de saques via webhooks](https://docs.asaas.com/docs/mecanismo-para-validacao-de-saque-via-webhooks). O campo discriminante é `type: PAYMENT_SPLIT`, o objeto é `paymentSplit` e a autenticação usa o cabeçalho `asaas-access-token`. Três falhas consecutivas ou uma resposta sem `APPROVED`/`REFUSED` levam ao cancelamento do split.
 
 ---
 
@@ -508,13 +510,7 @@ curl --request GET \
 
 ## Variáveis de Ambiente
 
-Copie o arquivo `.env.example` para `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Depois, preencha as variáveis de ambiente necessárias para o funcionamento da aplicação.
+No desenvolvimento local, copie `api/.env.example` para `api/.env`. No Render, use **Environment** do serviço; não faça upload do arquivo `.env`.
 
 ### Exemplo
 
@@ -522,9 +518,56 @@ Depois, preencha as variáveis de ambiente necessárias para o funcionamento da 
 ASAAS_API_KEY=your_asaas_api_key
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+ASAAS_WITHDRAWAL_WEBHOOK_TOKEN=your_random_webhook_secret
+API_PREFIX=/api/v1
 ```
 
 > ⚠️ Nunca versione o arquivo `.env` contendo credenciais reais.
+
+| Variável | Uso nesta integração |
+|---|---|
+| `ASAAS_API_URL` | Base da API do Asaas. No Sandbox, `https://api-sandbox.asaas.com/v3`. |
+| `ASAAS_API_KEY` | Chave da conta principal do Asaas, usada para consultar a cobrança e os splits. |
+| `SUPABASE_URL` | URL REST do projeto Supabase autorizado. |
+| `SUPABASE_KEY` | Chave usada pelos fluxos existentes que não exigem service role; é obrigatória na inicialização local atual. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave privilegiada usada somente no servidor para localizar pagamento, aula e instrutor sem depender de RLS. Nunca exponha no cliente. |
+| `ASAAS_WITHDRAWAL_WEBHOOK_TOKEN` | Segredo enviado pelo Asaas no cabeçalho `asaas-access-token`; deve ser idêntico ao token configurado no painel do Asaas. |
+| `API_PREFIX` | Prefixo das rotas. O padrão é `/api/v1`; alterar exige atualizar a URL completa no Asaas. |
+
+`ASAAS_WITHDRAWAL_WEBHOOK_TOKEN` e `SUPABASE_SERVICE_ROLE_KEY` são específicas desta validação. Se faltarem ou estiverem vazias, a rota responde `503`; elas não são ignoradas e não devem ser substituídas por `SUPABASE_KEY`.
+
+## Deploy e validação operacional
+
+O repositório não contém `render.yaml`, `Procfile` ou `Dockerfile`; portanto a versão do branch, o Root Directory e os comandos efetivos são configurações do serviço existente no Render. O serviço público deve expor a rota registrada como:
+
+```text
+https://bepayhub.onrender.com/api/v1/asaas/withdrawal-validation
+```
+
+No Render, confira o serviço, branch, último deploy, Root Directory, Build Command e Start Command. Se o Root Directory for `api`, o fluxo atual usa `python app.py`. Se o diretório raiz for o repositório, o Start Command precisa entrar em `api` antes de executar `app.py`. Alterações em variáveis requerem um redeploy para novas instâncias.
+
+Teste público básico, sem enviar credenciais:
+
+```bash
+curl -i "$BEPAYHUB_BASE_URL/api/v1/health"
+curl -i -X POST "$BEPAYHUB_BASE_URL/api/v1/asaas/withdrawal-validation" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Teste de autenticação com token apenas em variável local:
+
+```bash
+export BEPAYHUB_BASE_URL=https://bepayhub.onrender.com
+export ASAAS_WITHDRAWAL_WEBHOOK_TOKEN
+curl -i -X POST "$BEPAYHUB_BASE_URL/api/v1/asaas/withdrawal-validation" \
+  -H "Content-Type: application/json" \
+  -H "asaas-access-token: token-incorreto" \
+  -d '{}'
+```
+
+O token incorreto ou ausente deve retornar `401`. Para uma validação controlada, use somente identificadores de uma cobrança Sandbox já existente e nunca publique o token. O corpo deve ser o mesmo formato enviado pelo Asaas e só recebe `APPROVED` se os registros no Supabase e na cobrança consultada coincidirem.
 
 ---
 

@@ -18,7 +18,7 @@ def create_app() -> Flask:
         app,
         resources={r"/*": {"origins": Settings.CORS_ALLOWED_ORIGINS}},
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "asaas-access-token"],
         max_age=600,
     )
 
