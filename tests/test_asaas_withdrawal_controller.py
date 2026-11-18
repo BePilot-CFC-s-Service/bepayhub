@@ -3,8 +3,11 @@ from unittest.mock import patch
 
 from flask import Flask
 
+from app import create_app
 from config import Settings
 from controllers.asaas_withdrawal_controller import AsaasWithdrawalController
+from errors import IntegrationError
+from services.split_authorization_service import SplitAuthorizationService
 
 
 class AsaasWithdrawalControllerTests(unittest.TestCase):
@@ -14,6 +17,15 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
         app.register_blueprint(self.controller.blueprint, url_prefix="/api/v1")
         self.client = app.test_client()
         self.token = "test-webhook-secret-not-for-production-123"
+        for name, value in (
+            ("SUPABASE_URL", "https://supabase.invalid"),
+            ("SUPABASE_SERVICE_ROLE_KEY", "test-service-role"),
+            ("ASAAS_API_URL", "https://asaas.invalid"),
+            ("ASAAS_API_KEY", "test-asaas-key"),
+        ):
+            patcher = patch.object(Settings, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_denies_requests_when_not_configured(self):
         with patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", ""):
@@ -28,6 +40,15 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
             response = self.client.post(
                 "/api/v1/asaas/withdrawal-validation", json={}, headers={"asaas-access-token": "wrong"}
             )
+        self.assertEqual(response.status_code, 401)
+        authorize.assert_not_called()
+
+    def test_denies_missing_token_without_calling_service(self):
+        with (
+            patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", self.token),
+            patch.object(self.controller.service, "is_authorized") as authorize,
+        ):
+            response = self.client.post("/api/v1/asaas/withdrawal-validation", json={})
         self.assertEqual(response.status_code, 401)
         authorize.assert_not_called()
 
@@ -53,12 +74,17 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
                 "/api/v1/asaas/withdrawal-validation", json={}, headers={"asaas-access-token": self.token}
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"status": "REFUSED"})
+        self.assertEqual(response.get_json()["status"], "REFUSED")
+        self.assertTrue(response.get_json()["refuseReason"])
 
     def test_dependency_failure_does_not_approve(self):
         with (
             patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", self.token),
-            patch.object(self.controller.service, "is_authorized", side_effect=RuntimeError("failure")),
+            patch.object(
+                self.controller.service,
+                "is_authorized",
+                side_effect=IntegrationError("temporary dependency failure", 502),
+            ),
         ):
             response = self.client.post(
                 "/api/v1/asaas/withdrawal-validation", json={}, headers={"asaas-access-token": self.token}
@@ -69,21 +95,34 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
         event = {
             "type": "PAYMENT_SPLIT",
             "paymentSplit": {
-                "id": "split-test", "status": "AWAITING_CREDIT", "payment": {"id": "pay-test"},
+                "id": "split-test",
+                "status": "AWAITING_CREDIT",
+                "payment": {"id": "pay-test", "externalReference": "lesson_93"},
                 "walletId": "wallet-test", "percentualValue": 85, "fixedValue": None, "totalValue": "86.17",
             },
         }
         provider_payment = {
             "id": "pay-test", "externalReference": "lesson_93", "status": "RECEIVED",
             "value": "105.00", "netValue": "101.38",
-            "split": [{"id": "split-test", "walletId": "wallet-test", "status": "AWAITING_CREDIT", "percentualValue": 85, "fixedValue": None}],
+            "split": [{
+                "id": "split-test",
+                "walletId": "wallet-test",
+                "status": "AWAITING_CREDIT",
+                "percentualValue": 85,
+                "fixedValue": None,
+                "totalValue": "86.17",
+            }],
         }
         with (
             patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", self.token),
             patch.object(self.controller.service, "supabase") as supabase,
             patch.object(self.controller.service, "asaas") as asaas,
         ):
-            supabase.fetch_all_service_role.return_value = [{"lesson_id": 93, "amount": "105.00"}]
+            supabase.fetch_all_service_role.return_value = [{
+                "lesson_id": 93,
+                "bepayhub_transaction_id": "pay-test",
+                "amount": "105.00",
+            }]
             supabase.fetch_one_service_role.side_effect = [
                 {"id": 93, "status": "Scheduled", "instructor_id": 17},
                 {"asaas_wallet_id": "wallet-test"},
@@ -106,8 +145,36 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
                 headers={"asaas-access-token": self.token},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"status": "REFUSED"})
+        self.assertEqual(response.get_json()["status"], "REFUSED")
         supabase.fetch_all_service_role.assert_not_called()
+
+    def test_app_registers_route_under_effective_api_prefix(self):
+        with (
+            patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", self.token),
+            patch.object(SplitAuthorizationService, "is_authorized", return_value=True),
+        ):
+            client = create_app().test_client()
+            response = client.post(
+                "/api/v1/asaas/withdrawal-validation",
+                json={"type": "PAYMENT_SPLIT"},
+                headers={"asaas-access-token": self.token},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"status": "APPROVED"})
+
+    def test_missing_dependencies_do_not_approve(self):
+        with (
+            patch.object(Settings, "ASAAS_WITHDRAWAL_WEBHOOK_TOKEN", self.token),
+            patch.object(Settings, "SUPABASE_SERVICE_ROLE_KEY", ""),
+            patch.object(self.controller.service, "is_authorized") as authorize,
+        ):
+            response = self.client.post(
+                "/api/v1/asaas/withdrawal-validation",
+                json={},
+                headers={"asaas-access-token": self.token},
+            )
+        self.assertEqual(response.status_code, 503)
+        authorize.assert_not_called()
 
 
 if __name__ == "__main__":

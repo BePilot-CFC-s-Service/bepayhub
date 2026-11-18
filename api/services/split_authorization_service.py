@@ -51,10 +51,20 @@ class SplitAuthorizationService:
         if len(payments) != 1:
             return self._refuse("pagamentos_ambiguos")
         payment = payments[0]
-        lesson = self.supabase.fetch_one_service_role("lesson", {"id": payment.get("lesson_id")})
+        if payment.get("bepayhub_transaction_id") != payment_id or not payment.get("lesson_id"):
+            return self._refuse("pagamento_divergente")
+        lesson_id = payment["lesson_id"]
+        expected_reference = f"lesson_{lesson_id}"
+        if payment_reference.get("externalReference") != expected_reference:
+            return self._refuse("referencia_evento_divergente")
+
+        lesson = self.supabase.fetch_one_service_role("lesson", {"id": lesson_id})
         if not lesson or lesson.get("status") in (LessonStatus.CANCELLED.value, LessonStatus.NO_SHOW.value):
             return self._refuse("aula_invalida")
-        instructor = self.supabase.fetch_one_service_role("instructor", {"id": lesson.get("instructor_id")})
+        instructor_id = lesson.get("instructor_id")
+        if not instructor_id:
+            return self._refuse("instrutor_ausente")
+        instructor = self.supabase.fetch_one_service_role("instructor", {"id": instructor_id})
         if not instructor or instructor.get("asaas_wallet_id") != wallet_id:
             return self._refuse("carteira_divergente")
 
@@ -62,7 +72,7 @@ class SplitAuthorizationService:
         if (
             not isinstance(provider_payment, dict)
             or provider_payment.get("id") != payment_id
-            or provider_payment.get("externalReference") != f"lesson_{payment['lesson_id']}"
+            or provider_payment.get("externalReference") != expected_reference
             or provider_payment.get("status") not in ("CONFIRMED", "RECEIVED")
         ):
             return self._refuse("cobranca_divergente")
@@ -77,21 +87,36 @@ class SplitAuthorizationService:
             or matching[0].get("status") != "AWAITING_CREDIT"
         ):
             return self._refuse("split_divergente")
-        if any(self._decimal(item.get("percentualValue")) != Decimal(INSTRUCTOR_SPLIT_PERCENT) for item in (split, matching[0])):
+        provider_split = matching[0]
+        if any(
+            self._decimal(item.get("percentualValue")) != Decimal(INSTRUCTOR_SPLIT_PERCENT)
+            for item in (split, provider_split)
+        ):
             return self._refuse("percentual_divergente")
-        if any(self._decimal(item.get("fixedValue") or 0) != Decimal("0") for item in (split, matching[0])):
-            return self._refuse("valor_fixo_nao_permitido")
+        for item in (split, provider_split):
+            fixed_value = item.get("fixedValue")
+            if fixed_value is not None and self._decimal(fixed_value) != Decimal("0"):
+                return self._refuse("valor_fixo_nao_permitido")
 
         total = self._decimal(payment.get("amount"))
         provider_total = self._decimal(provider_payment.get("value"))
         net_value = self._decimal(provider_payment.get("netValue"))
         split_value = self._decimal(split.get("totalValue"))
-        if total is None or total <= 0 or provider_total != total or net_value is None or net_value <= 0 or split_value is None:
+        provider_split_value = self._decimal(provider_split.get("totalValue"))
+        if (
+            total is None
+            or total <= 0
+            or provider_total != total
+            or net_value is None
+            or net_value <= 0
+            or split_value is None
+            or provider_split_value is None
+        ):
             return self._refuse("valores_invalidos")
         expected = (net_value * Decimal(INSTRUCTOR_SPLIT_PERCENT) / Decimal("100")).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        if split_value != expected:
+        if split_value != expected or provider_split_value != expected:
             return self._refuse("valor_split_divergente")
         logger.info("Validação de split aprovada")
         return True
