@@ -99,6 +99,22 @@ class AsaasRepository:
         return cls._request("GET", f"/payments/{payment_id}")
 
     @classmethod
+    def refund_payment(cls, payment_id: str) -> Dict[str, Any]:
+        return cls._request("POST", f"/payments/{payment_id}/refund", data={})
+
+    @classmethod
+    def get_payment_refunds(cls, payment_id: str) -> Dict[str, Any]:
+        return cls._request("GET", f"/payments/{payment_id}/refunds")
+
+    @classmethod
+    def get_anticipation_configuration(cls, api_key: Optional[str] = None) -> Dict[str, Any]:
+        return cls._request("GET", "/anticipations/configurations", api_key=api_key)
+
+    @classmethod
+    def simulate_anticipation(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return cls._request("POST", "/anticipations/simulate", data=payload)
+
+    @classmethod
     def get_pix_qr_code(cls, payment_id: str) -> Dict[str, Any]:
         return cls._request("GET", f"/payments/{payment_id}/pixQrCode")
 
