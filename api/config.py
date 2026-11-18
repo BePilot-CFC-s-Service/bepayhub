@@ -30,6 +30,7 @@ class Settings:
     ASAAS_API_URL = (os.getenv("ASAAS_API_URL") or "").rstrip("/")
     ASAAS_API_KEY = os.getenv("ASAAS_API_KEY") or ""
     ASAAS_REQUEST_TIMEOUT = float(os.getenv("ASAAS_REQUEST_TIMEOUT", "10"))
+    ASAAS_PIX_QR_TIMEOUT = float(os.getenv("ASAAS_PIX_QR_TIMEOUT", "30"))
     REFUND_API_KEY = os.getenv("BEPAYHUB_REFUND_API_KEY") or ""
     ANTICIPATION_API_KEY = os.getenv("BEPAYHUB_ANTICIPATION_API_KEY") or ""
     ASAAS_WITHDRAWAL_WEBHOOK_TOKEN = os.getenv("ASAAS_WITHDRAWAL_WEBHOOK_TOKEN") or ""

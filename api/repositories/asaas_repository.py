@@ -10,6 +10,7 @@ class AsaasRepository:
     BASE_URL = Settings.ASAAS_API_URL
     API_KEY = Settings.ASAAS_API_KEY
     TIMEOUT = Settings.ASAAS_REQUEST_TIMEOUT
+    PIX_QR_TIMEOUT = Settings.ASAAS_PIX_QR_TIMEOUT
     USER_AGENT = "BePayHub/1.0.0"
 
     @staticmethod
@@ -31,6 +32,7 @@ class AsaasRepository:
         data: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
         api_key: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Requisição genérica com suporte a api_key da subconta."""
         url = f"{cls.BASE_URL}/{endpoint.lstrip('/')}"
@@ -41,7 +43,7 @@ class AsaasRepository:
                 headers=cls._headers(api_key),
                 json=data,
                 params=params,
-                timeout=cls.TIMEOUT,
+                timeout=cls.TIMEOUT if timeout is None else timeout,
             )
 
             if response.status_code == 204:
@@ -116,7 +118,7 @@ class AsaasRepository:
 
     @classmethod
     def get_pix_qr_code(cls, payment_id: str) -> Dict[str, Any]:
-        return cls._request("GET", f"/payments/{payment_id}/pixQrCode")
+        return cls._request("GET", f"/payments/{payment_id}/pixQrCode", timeout=cls.PIX_QR_TIMEOUT)
 
     @classmethod
     def create_subaccount(cls, payload: Dict[str, Any]) -> Dict[str, Any]:

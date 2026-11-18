@@ -215,6 +215,10 @@ O mecanismo de validação de saques do Asaas pode se aplicar a outras operaçõ
 
 ## 🔑 Pagamento via PIX
 
+O tempo limite da consulta ao QR Code é configurado por `ASAAS_PIX_QR_TIMEOUT` em segundos (padrão: 30), independentemente do timeout de criação da cobrança. Se houver exatamente um PIX pendente já registrado para a aula, uma nova solicitação consulta novamente o QR dessa cobrança em vez de criar outra. Cobranças pendentes ambíguas exigem conciliação.
+
+Se ocorrer timeout durante a criação da cobrança, o Asaas pode tê-la criado mesmo sem devolver resposta. Nesse caso, consulte a referência da aula no Asaas antes de tentar novamente; a recuperação automática descrita acima depende de a cobrança já estar registrada no banco e não garante idempotência para criações simultâneas ou não registradas.
+
 ### Body
 
 ```json
