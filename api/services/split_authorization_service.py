@@ -1,5 +1,5 @@
 import logging
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 
 from errors import IntegrationError
 from models.enums import LessonStatus
@@ -114,7 +114,7 @@ class SplitAuthorizationService:
         ):
             return self._refuse("valores_invalidos")
         expected = (net_value * Decimal(INSTRUCTOR_SPLIT_PERCENT) / Decimal("100")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+            Decimal("0.01"), rounding=ROUND_DOWN
         )
         if split_value != expected or provider_split_value != expected:
             return self._refuse("valor_split_divergente")

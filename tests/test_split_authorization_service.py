@@ -19,7 +19,7 @@ class SplitAuthorizationServiceTests(unittest.TestCase):
                 "walletId": "wallet-test",
                 "percentualValue": 85,
                 "fixedValue": None,
-                "totalValue": "86.17",
+                "totalValue": "87.55",
             },
         }
         self.service.supabase.fetch_all_service_role.return_value = [{
@@ -36,20 +36,50 @@ class SplitAuthorizationServiceTests(unittest.TestCase):
             "externalReference": "lesson_93",
             "status": "RECEIVED",
             "value": "105.00",
-            "netValue": "101.38",
+            "netValue": "103.01",
             "split": [{
                 "id": "split-test",
                 "walletId": "wallet-test",
                 "status": "AWAITING_CREDIT",
                 "percentualValue": 85,
                 "fixedValue": None,
-                "totalValue": "86.17",
+                "totalValue": "87.55",
             }],
         }
 
     def test_approves_matching_payment_wallet_and_net_split(self):
         self.assertTrue(self.service.is_authorized(self.event))
         self.service.asaas.get_payment.assert_called_once_with("pay-test")
+
+    def test_approves_when_truncation_and_rounding_produce_same_cents(self):
+        provider_payment = self.service.asaas.get_payment.return_value
+        provider_payment["netValue"] = "101.38"
+        provider_payment["split"][0]["totalValue"] = "86.17"
+        self.event["paymentSplit"]["totalValue"] = "86.17"
+        self.assertTrue(self.service.is_authorized(self.event))
+
+    def test_refuses_split_rounded_up_even_when_provider_and_event_match(self):
+        self.event["paymentSplit"]["totalValue"] = "87.56"
+        self.service.asaas.get_payment.return_value["split"][0]["totalValue"] = "87.56"
+        self.assertFalse(self.service.is_authorized(self.event))
+
+    def test_refuses_split_one_cent_below_truncated_value(self):
+        self.event["paymentSplit"]["totalValue"] = "87.54"
+        self.service.asaas.get_payment.return_value["split"][0]["totalValue"] = "87.54"
+        self.assertFalse(self.service.is_authorized(self.event))
+
+    def test_refuses_split_with_fractional_cents(self):
+        self.event["paymentSplit"]["totalValue"] = "87.5585"
+        self.service.asaas.get_payment.return_value["split"][0]["totalValue"] = "87.5585"
+        self.assertFalse(self.service.is_authorized(self.event))
+
+    def test_refuses_notification_webhook_without_queries(self):
+        self.assertFalse(self.service.is_authorized({
+            "event": "PAYMENT_RECEIVED",
+            "payment": self.service.asaas.get_payment.return_value,
+        }))
+        self.service.supabase.fetch_all_service_role.assert_not_called()
+        self.service.asaas.get_payment.assert_not_called()
 
     def test_refuses_unrelated_operation_without_queries(self):
         self.event["type"] = "TRANSFER"

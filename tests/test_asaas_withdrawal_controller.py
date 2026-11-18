@@ -98,19 +98,19 @@ class AsaasWithdrawalControllerTests(unittest.TestCase):
                 "id": "split-test",
                 "status": "AWAITING_CREDIT",
                 "payment": {"id": "pay-test", "externalReference": "lesson_93"},
-                "walletId": "wallet-test", "percentualValue": 85, "fixedValue": None, "totalValue": "86.17",
+                "walletId": "wallet-test", "percentualValue": 85, "fixedValue": None, "totalValue": "87.55",
             },
         }
         provider_payment = {
             "id": "pay-test", "externalReference": "lesson_93", "status": "RECEIVED",
-            "value": "105.00", "netValue": "101.38",
+            "value": "105.00", "netValue": "103.01",
             "split": [{
                 "id": "split-test",
                 "walletId": "wallet-test",
                 "status": "AWAITING_CREDIT",
                 "percentualValue": 85,
                 "fixedValue": None,
-                "totalValue": "86.17",
+                "totalValue": "87.55",
             }],
         }
         with (
