@@ -32,16 +32,16 @@ class PaymentCardAddressTests(unittest.TestCase):
             },
         }
 
-    def _run_payment(self, addresses):
+    def _run_payment(self, student_address):
         service = PaymentService()
         service._apply_payment_status = Mock()
+        student = {**self.student, **student_address}
         with (
             patch.object(
                 SupabaseRepository,
                 "fetch_one",
-                side_effect=[self.lesson, self.student, self.instructor],
+                side_effect=[self.lesson, student, self.instructor],
             ),
-            patch.object(SupabaseRepository, "fetch_all", return_value=addresses) as fetch_all,
             patch.object(SupabaseRepository, "insert", return_value={"id": 55}),
             patch.object(
                 AsaasRepository,
@@ -50,19 +50,12 @@ class PaymentCardAddressTests(unittest.TestCase):
             ) as create_payment,
         ):
             result = service.pay_lesson(self.lesson["id"], self.card_data)
-        return result, fetch_all, create_payment
+        return result, create_payment
 
     def test_uses_student_address_but_keeps_cardholder_cpf(self):
-        result, fetch_all, create_payment = self._run_payment([
-            {"zip_code": "11111-111", "number": "10", "updated_at": "2025-01-01T00:00:00Z"},
-            {"zip_code": "01234-567", "number": "42B", "updated_at": "2025-02-01T00:00:00Z"},
-        ])
+        result, create_payment = self._run_payment({"zip_code": "01234-567", "number": "42B"})
 
         self.assertTrue(result["success"])
-        fetch_all.assert_called_once_with(
-            "address",
-            {"owner_id": 21, "owner_type": "Student"},
-        )
         holder = create_payment.call_args.args[0]["creditCardHolderInfo"]
         self.assertEqual(holder["postalCode"], "01234567")
         self.assertEqual(holder["addressNumber"], "42B")
@@ -77,9 +70,7 @@ class PaymentCardAddressTests(unittest.TestCase):
         self.card_data["credit_card_holder_info"].pop("phone")
         self.card_data["credit_card_holder_info"].pop("mobilePhone")
 
-        result, _, create_payment = self._run_payment([
-            {"zip_code": "01234-567", "number": "42"},
-        ])
+        result, create_payment = self._run_payment({"zip_code": "01234-567", "number": "42"})
 
         self.assertTrue(result["success"])
         holder = create_payment.call_args.args[0]["creditCardHolderInfo"]
@@ -89,12 +80,7 @@ class PaymentCardAddressTests(unittest.TestCase):
     def test_rejects_card_payment_without_valid_saved_address(self):
         service = PaymentService()
         with (
-            patch.object(
-                SupabaseRepository,
-                "fetch_one",
-                side_effect=[self.lesson, self.student, self.instructor],
-            ),
-            patch.object(SupabaseRepository, "fetch_all", return_value=[{"zip_code": "123", "number": ""}]),
+            patch.object(SupabaseRepository, "fetch_one", side_effect=[self.lesson, {**self.student, "zip_code": "123", "number": ""}, self.instructor]),
             patch.object(AsaasRepository, "create_payment") as create_payment,
         ):
             with self.assertRaises(ValidationError):
@@ -104,6 +90,7 @@ class PaymentCardAddressTests(unittest.TestCase):
 
     def test_rejects_card_payment_without_valid_saved_phone(self):
         self.student["phone"] = None
+        self.student.update({"zip_code": "01234-567", "number": "42"})
         service = PaymentService()
         with (
             patch.object(
@@ -111,7 +98,6 @@ class PaymentCardAddressTests(unittest.TestCase):
                 "fetch_one",
                 side_effect=[self.lesson, self.student, self.instructor],
             ),
-            patch.object(SupabaseRepository, "fetch_all", return_value=[{"zip_code": "01234-567", "number": "42"}]),
             patch.object(AsaasRepository, "create_payment") as create_payment,
         ):
             with self.assertRaisesRegex(ValidationError, "telefone"):
