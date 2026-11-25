@@ -29,14 +29,6 @@ class SubaccountService:
                 400
             )
 
-        # Busca endereço do instrutor
-        address = self.supabase.fetch_one("address", {
-            "owner_id": instructor_id,
-            "owner_type": "Instructor"
-        })
-        if not address:
-            address = {}
-
         # Monta payload base (campos obrigatórios para MEI)
         payload = {
             "name": f"{instructor['name']} {instructor.get('last_name', '')}".strip(),
@@ -55,16 +47,16 @@ class SubaccountService:
         if instructor.get("incomeValue") is not None:
             payload["incomeValue"] = instructor["incomeValue"]
 
-        # Adiciona endereço se disponível
-        if address:
+        # Adiciona endereço se disponível (colunas de endereço ficam na própria linha do instrutor)
+        if instructor.get("street"):
             payload.update({
-                "address": address.get("street"),
-                "addressNumber": address.get("number"),
-                "complement": address.get("complement", ""),
-                "province": address.get("province", ""),
-                "postalCode": address.get("zip_code"),
-                "city": address.get("city"),
-                "state": address.get("state"),
+                "address": instructor.get("street"),
+                "addressNumber": instructor.get("number"),
+                "complement": instructor.get("complement") or "",
+                "province": instructor.get("province", ""),
+                "postalCode": instructor.get("zip_code"),
+                "city": instructor.get("city"),
+                "state": instructor.get("state"),
             })
 
         # Chama API Asaas para criar subconta

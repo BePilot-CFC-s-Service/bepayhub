@@ -32,18 +32,14 @@ class CustomerService:
             "phone": user_data["phone"],
         }
 
-        # Adiciona endereço se existir
-        address = self.supabase.fetch_one("address", {
-            "owner_id": user_id,
-            "owner_type": user_type.capitalize()
-        })
-        if address:
+        # Adiciona endereço se existir (colunas de endereço ficam na própria linha do usuário)
+        if user_data.get("street"):
             customer_payload.update({
-                "address": address.get("street"),
-                "addressNumber": address.get("number"),
-                "city": address.get("city"),
-                "state": address.get("state"),
-                "postalCode": address.get("zip_code"),
+                "address": user_data.get("street"),
+                "addressNumber": user_data.get("number"),
+                "city": user_data.get("city"),
+                "state": user_data.get("state"),
+                "postalCode": user_data.get("zip_code"),
             })
 
         # Cria customer no Asaas

@@ -19,13 +19,10 @@ class SubaccountServiceTests(unittest.TestCase):
             "birth_date": "1988-12-10",
             "incomeValue": 4000,
             "asaas_wallet_id": None,
-        }
-        self.address = {
             "street": "Rua Um",
             "number": "42",
             "complement": "Sala 5",
-            "province": "Centro",
-            "zip_code": "01001-000",
+            "zip_code": "01001000",
             "city": "Sao Paulo",
             "state": "SP",
         }
@@ -33,8 +30,6 @@ class SubaccountServiceTests(unittest.TestCase):
     def _fetch_one(self, table, query):
         if table == "instructor":
             return self.instructor
-        if table == "address":
-            return self.address
         self.fail(f"Consulta inesperada: {table}")
 
     def test_persists_wallet_id_and_preserves_original_payload_data(self):
@@ -55,8 +50,8 @@ class SubaccountServiceTests(unittest.TestCase):
             "address": "Rua Um",
             "addressNumber": "42",
             "complement": "Sala 5",
-            "province": "Centro",
-            "postalCode": "01001-000",
+            "province": "",
+            "postalCode": "01001000",
             "city": "Sao Paulo",
             "state": "SP",
         }
